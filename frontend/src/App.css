@@ -1,0 +1,287 @@
+.app-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: 100dvh;
+}
+
+.sidebar {
+  padding: 28px 20px;
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+}
+
+.brand {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.nav-link {
+  display: block;
+  padding: 12px 16px;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.nav-link[aria-current='page'] {
+  background-color: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.main-content {
+  min-width: 0;
+  padding: 32px;
+}
+
+.page-header {
+  margin-bottom: 28px;
+}
+
+.page-header h1 {
+  font-size: 1.75rem;
+}
+
+.page-header p {
+  margin-top: 8px;
+  color: var(--text-muted);
+}
+
+.panel {
+  padding: 24px;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.panel h2 {
+  font-size: 1.125rem;
+}
+
+.empty-state {
+  padding: 48px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .app-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    padding: 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .brand {
+    margin-bottom: 16px;
+  }
+
+  .main-content {
+    padding: 20px 16px;
+  }
+}
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.brand-short {
+  display: none;
+}
+
+.sidebar-toggle {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.sidebar-toggle:hover {
+  background-color: var(--accent-soft);
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.nav-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+@media (min-width: 701px) {
+  .sidebar-collapsed {
+    grid-template-columns: 80px minmax(0, 1fr);
+  }
+
+  .sidebar-collapsed .sidebar {
+    padding-inline: 12px;
+  }
+
+  .sidebar-collapsed .sidebar-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .sidebar-collapsed .brand-name,
+  .sidebar-collapsed .nav-label {
+    display: none;
+  }
+
+  .sidebar-collapsed .brand-short {
+    display: inline;
+  }
+
+  .sidebar-collapsed .nav-link {
+    justify-content: center;
+    padding-inline: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .sidebar-toggle {
+    display: none;
+  }
+
+  .sidebar-header {
+    margin-bottom: 16px;
+  }
+
+  .sidebar-header .brand {
+    margin-bottom: 0;
+  }
+}
+
+.transaction-table-container {
+  margin-top: 20px;
+  overflow-x: auto;
+}
+
+.transaction-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.transaction-table caption {
+  padding-bottom: 16px;
+  color: var(--text-muted);
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.transaction-table th,
+.transaction-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.transaction-table th {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.transaction-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.transaction-table .transaction-amount {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.transaction-income {
+  color: var(--success);
+}
+
+.transaction-expense {
+  color: var(--danger);
+}
+
+.panel + .panel {
+  margin-top: 24px;
+}
+
+.prototype-notice {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.transaction-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-field input,
+.form-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+}
+
+.form-field small {
+  color: var(--text-muted);
+}
+
+.form-error {
+  grid-column: 1 / -1;
+  color: var(--danger);
+}
+
+.submit-button {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 8px;
+  background-color: var(--accent);
+  color: #111111;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit-button:hover {
+  background-color: var(--accent-hover);
+}
+
+@media (max-width: 700px) {
+  .transaction-form {
+    grid-template-columns: 1fr;
+  }
+}
