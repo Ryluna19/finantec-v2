@@ -25,7 +25,7 @@ function TransactionList({ transactions }) {
       tabIndex={0}
     >
       <table className="transaction-table">
-        <caption>Movimentações financeiras — dados de exemplo</caption>
+        <caption>Movimentações financeiras</caption>
 
         <thead>
           <tr>

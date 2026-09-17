@@ -1,42 +1,50 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import TransactionList from './components/TransactionList'
 import TransactionForm from './components/TransactionForm'
 import './App.css'
 
-const sampleTransactions = [
-    {
-      id: 'sample-1',
-      date: '2026-07-10',
-      description: 'Bolsa de estágio',
-      category: 'Trabalho',
-      type: 'income',
-      amountInCents: 150000,
-    },
-    {
-      id: 'sample-2',
-      date: '2026-07-15',
-      description: 'Compra no mercado',
-      category: 'Alimentação',
-      type: 'expense',
-      amountInCents: 8590,
-    },
-  ]
-
 function App() {
-  
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-  const [transactions, setTransactions] = useState(sampleTransactions)
-  
 
-  function handleAddTransaction(transactionData) {
-    const newTransaction = {
-      ...transactionData,
-      id: crypto.randomUUID(),
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [transactions, setTransactions] = useState([])
+
+  useEffect(() => {
+    async function loadTransactions() {
+      try {
+        const response = await fetch('http://localhost:3000/transactions')
+
+        if (!response.ok) {
+          throw new Error('Não foi possível carregar as transações.')
+        }
+
+        const data = await response.json()
+        setTransactions(data)
+      } catch (error) {
+        console.error(error)
+      }
     }
 
-    setTransactions((previous) => [newTransaction, ...previous])
+    loadTransactions()
+  }, [])
+
+  async function handleAddTransaction(transactionData) {
+  const response = await fetch('http://localhost:3000/transactions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(transactionData),
+  })
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Não foi possível cadastrar a transação.')
   }
-  
+
+  setTransactions((previous) => [data, ...previous])
+}
+
   return (
     <div className={`app-layout${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       <aside className="sidebar">
@@ -95,8 +103,8 @@ function App() {
         <section className="panel" aria-labelledby="new-transaction-title">
           <h2 id="new-transaction-title">Nova transação</h2>
           <p className="prototype-notice">
-            Ambiente de exemplo. Os dados desta tela são perdidos ao
-            recarregar a página.
+            Ambiente de exemplo. Os dados cadastrados são mantidos apenas
+            enquanto o backend estiver em execução.
           </p>
 
           <TransactionForm onAddTransaction={handleAddTransaction} />

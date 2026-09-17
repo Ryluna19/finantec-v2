@@ -3,7 +3,7 @@ import { useState } from 'react'
 function TransactionForm({ onAddTransaction }) {
     const [error, setError] = useState('')
 
-    function handleSubmit(event) {
+    async function handleSubmit(event)  {
         event.preventDefault()
 
         const form = event.currentTarget
@@ -44,16 +44,20 @@ function TransactionForm({ onAddTransaction }) {
             return
         }
 
-        onAddTransaction({
-            date,
-            description,
-            category,
-            type,
-            amountInCents,
-        })
+        try {
+            await onAddTransaction({
+                date,
+                description,
+                category,
+                type,
+                amountInCents,
+            })
 
-        setError('')
-        form.reset()
+            setError('')
+            form.reset()
+            } catch (error) {
+            setError(error.message)
+        }
     }
 
     return (
@@ -72,7 +76,6 @@ function TransactionForm({ onAddTransaction }) {
                 <input
                     id="transaction-description"
                     name="description"
-                    maxLength={120}
                     required
                 />
             </div>
@@ -82,7 +85,6 @@ function TransactionForm({ onAddTransaction }) {
                 <input
                     id="transaction-category"
                     name="category"
-                    maxLength={60}
                     required
                 />
             </div>
