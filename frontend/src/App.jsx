@@ -103,8 +103,7 @@ function App() {
         <section className="panel" aria-labelledby="new-transaction-title">
           <h2 id="new-transaction-title">Nova transação</h2>
           <p className="prototype-notice">
-            Ambiente de exemplo. Os dados cadastrados são mantidos apenas
-            enquanto o backend estiver em execução.
+             Ambiente em desenvolvimento com persistência local.
           </p>
 
           <TransactionForm onAddTransaction={handleAddTransaction} />

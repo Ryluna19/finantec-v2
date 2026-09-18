@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import { randomUUID } from 'node:crypto'
+import pool from './database.js'
 
 const app = express()
 const port = 3000
@@ -28,36 +29,46 @@ function isValidDate(date) {
   )
 }
 
-const transactions = [
-  {
-    id: 'sample-1',
-    date: '2026-07-10',
-    description: 'Bolsa de estágio',
-    category: 'Trabalho',
-    type: 'income',
-    amountInCents: 150000,
-  },
-  {
-    id: 'sample-2',
-    date: '2026-07-15',
-    description: 'Compra no mercado',
-    category: 'Alimentação',
-    type: 'expense',
-    amountInCents: 8590,
-  },
-]
-
 app.get('/health', (request, response) => {
   response.json({
     status: 'ok',
   })
 })
 
-app.get('/transactions', (request, response) => {
-  response.json(transactions)
+app.get('/transactions', async (request, response) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        id,
+        to_char(transaction_date, 'YYYY-MM-DD') AS date,
+        description,
+        category,
+        transaction_type AS type,
+        amount_in_cents
+      FROM transactions
+      ORDER BY transaction_date DESC, id DESC
+    `)
+
+    const databaseTransactions = result.rows.map((transaction) => ({
+      id: transaction.id,
+      date: transaction.date,
+      description: transaction.description,
+      category: transaction.category,
+      type: transaction.type,
+      amountInCents: Number(transaction.amount_in_cents),
+    }))
+
+    response.json(databaseTransactions)
+  } catch (error) {
+    console.error('Failed to load transactions:', error)
+
+    response.status(500).json({
+      error: 'Não foi possível carregar as transações.',
+    })
+  }
 })
 
-app.post('/transactions', (request, response) => {
+app.post('/transactions', async (request, response) => {
   const { date, description, category, type, amountInCents } = request.body
 
   const normalizedDescription =
@@ -73,16 +84,16 @@ app.post('/transactions', (request, response) => {
   }
 
   if (!normalizedDescription) {
-  return response.status(400).json({
-    error: 'Informe uma descrição válida.',
-  })
-}
+    return response.status(400).json({
+      error: 'Informe uma descrição válida.',
+    })
+  }
 
   if (!normalizedCategory) {
-  return response.status(400).json({
-    error: 'Informe uma categoria válida.',
-  })
-}
+    return response.status(400).json({
+      error: 'Informe uma categoria válida.',
+    })
+  }
 
   if (!['income', 'expense'].includes(type)) {
     return response.status(400).json({
@@ -96,18 +107,55 @@ app.post('/transactions', (request, response) => {
     })
   }
 
-  const newTransaction = {
-    id: randomUUID(),
-    date,
-    description: normalizedDescription,
-    category: normalizedCategory,
-    type,
-    amountInCents,
+  const id = randomUUID()
+
+  try {
+    const result = await pool.query(
+      `
+        INSERT INTO transactions (
+          id,
+          transaction_date,
+          transaction_type,
+          description,
+          category,
+          amount_in_cents
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING
+          id,
+          to_char(transaction_date, 'YYYY-MM-DD') AS date,
+          description,
+          category,
+          transaction_type AS type,
+          amount_in_cents
+      `,
+      [
+        id,
+        date,
+        type,
+        normalizedDescription,
+        normalizedCategory,
+        amountInCents,
+      ],
+    )
+
+    const transaction = result.rows[0]
+
+    return response.status(201).json({
+      id: transaction.id,
+      date: transaction.date,
+      description: transaction.description,
+      category: transaction.category,
+      type: transaction.type,
+      amountInCents: Number(transaction.amount_in_cents),
+    })
+  } catch (error) {
+    console.error('Failed to create transaction:', error)
+
+    return response.status(500).json({
+      error: 'Não foi possível cadastrar a transação.',
+    })
   }
-
-  transactions.unshift(newTransaction)
-
-  return response.status(201).json(newTransaction)
 })
 
 app.listen(port, () => {
