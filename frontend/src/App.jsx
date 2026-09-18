@@ -45,6 +45,29 @@ function App() {
   setTransactions((previous) => [data, ...previous])
 }
 
+async function handleDeleteTransaction(id) {
+  const response = await fetch(`http://localhost:3000/transactions/${id}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    let message = 'Não foi possível excluir a transação.'
+
+    try {
+      const data = await response.json()
+      message = data.error || message
+    } catch {
+      // Mantém a mensagem padrão se a resposta não possuir JSON válido.
+    }
+
+    throw new Error(message)
+  }
+
+  setTransactions((previous) =>
+    previous.filter((transaction) => transaction.id !== id),
+  )
+}
+
   return (
     <div className={`app-layout${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       <aside className="sidebar">
@@ -112,7 +135,10 @@ function App() {
         <section className="panel" aria-labelledby="transactions-title">
           <h2 id="transactions-title">Movimentações</h2>
 
-          <TransactionList transactions={transactions} />
+          <TransactionList
+            transactions={transactions}
+            onDeleteTransaction={handleDeleteTransaction}
+          />
         </section>
       </main>
     </div>

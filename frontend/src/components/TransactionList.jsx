@@ -8,13 +8,29 @@ function formatDate(date) {
   return `${day}/${month}/${year}`
 }
 
-function TransactionList({ transactions }) {
+function TransactionList({ transactions, onDeleteTransaction }) {
   if (transactions.length === 0) {
     return (
       <div className="empty-state">
         <p>Nenhuma transação para exibir.</p>
       </div>
     )
+  }
+
+  async function handleDelete(transaction) {
+    const confirmed = window.confirm(
+      `Excluir permanentemente a transação "${transaction.description}"?`,
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await onDeleteTransaction(transaction.id)
+    } catch (error) {
+      window.alert(error.message)
+    }
   }
 
   return (
@@ -28,6 +44,7 @@ function TransactionList({ transactions }) {
         <caption>Movimentações financeiras</caption>
 
         <thead>
+          <th scope="col">Ações</th>
           <tr>
             <th scope="col">Data</th>
             <th scope="col">Descrição</th>
@@ -50,6 +67,15 @@ function TransactionList({ transactions }) {
                 className={`transaction-amount transaction-${transaction.type}`}
               >
                 {currencyFormatter.format(transaction.amountInCents / 100)}
+              </td>
+              <td>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(transaction)}
+                  aria-label={`Excluir ${transaction.description}`}
+                >
+                  Excluir
+                </button>
               </td>
             </tr>
           ))}

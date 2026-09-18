@@ -29,6 +29,12 @@ function isValidDate(date) {
   )
 }
 
+function isValidUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  )
+}
+
 app.get('/health', (request, response) => {
   response.json({
     status: 'ok',
@@ -160,4 +166,39 @@ app.post('/transactions', async (request, response) => {
 
 app.listen(port, () => {
   console.log(`FinanTec API running on http://localhost:${port}`)
+})
+
+app.delete('/transactions/:id', async (request, response) => {
+  const { id } = request.params
+
+  if (!isValidUuid(id)) {
+    return response.status(400).json({
+      error: 'Identificador de transação inválido.',
+    })
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        DELETE FROM transactions
+        WHERE id = $1
+        RETURNING id
+      `,
+      [id],
+    )
+
+    if (result.rowCount === 0) {
+      return response.status(404).json({
+        error: 'Transação não encontrada.',
+      })
+    }
+
+    return response.status(204).send()
+  } catch (error) {
+    console.error('Failed to delete transaction:', error)
+
+    return response.status(500).json({
+      error: 'Não foi possível excluir a transação.',
+    })
+  }
 })
