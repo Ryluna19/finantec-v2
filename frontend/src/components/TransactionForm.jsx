@@ -1,9 +1,22 @@
 import { useState } from 'react'
 
-function TransactionForm({ onAddTransaction }) {
+
+function formatAmountForInput(amountInCents) {
+    const whole = Math.floor(amountInCents / 100)
+    const fraction = String(amountInCents % 100).padStart(2, '0')
+
+    return `${whole},${fraction}`
+}
+
+function TransactionForm({
+    transaction,
+    onAddTransaction,
+    onUpdateTransaction,
+    onCancelEdit,
+}) {
     const [error, setError] = useState('')
 
-    async function handleSubmit(event)  {
+    async function handleSubmit(event) {
         event.preventDefault()
 
         const form = event.currentTarget
@@ -45,17 +58,23 @@ function TransactionForm({ onAddTransaction }) {
         }
 
         try {
-            await onAddTransaction({
+            const transactionData = {
                 date,
                 description,
                 category,
                 type,
                 amountInCents,
-            })
+            }
+
+            if (transaction) {
+                await onUpdateTransaction(transaction.id, transactionData)
+            } else {
+                await onAddTransaction(transactionData)
+                form.reset()
+            }
 
             setError('')
-            form.reset()
-            } catch (error) {
+        } catch (error) {
             setError(error.message)
         }
     }
@@ -68,6 +87,7 @@ function TransactionForm({ onAddTransaction }) {
                     id="transaction-date"
                     name="date"
                     type="date"
+                    defaultValue={transaction?.date ?? ''}
                     required
                 />
             </div>
@@ -76,6 +96,7 @@ function TransactionForm({ onAddTransaction }) {
                 <input
                     id="transaction-description"
                     name="description"
+                    defaultValue={transaction?.description ?? ''}
                     required
                 />
             </div>
@@ -85,13 +106,18 @@ function TransactionForm({ onAddTransaction }) {
                 <input
                     id="transaction-category"
                     name="category"
+                    defaultValue={transaction?.category ?? ''}
                     required
                 />
             </div>
 
             <div className="form-field">
                 <label htmlFor="transaction-type">Tipo</label>
-                <select id="transaction-type" name="type" defaultValue="expense">
+                <select
+                    id="transaction-type"
+                    name="type"
+                    defaultValue={transaction?.type ?? 'expense'}
+                >
                     <option value="expense">Despesa</option>
                     <option value="income">Receita</option>
                 </select>
@@ -106,6 +132,11 @@ function TransactionForm({ onAddTransaction }) {
                     placeholder="85,90"
                     maxLength={16}
                     aria-describedby="transaction-amount-hint"
+                    defaultValue={
+                        transaction
+                            ? formatAmountForInput(transaction.amountInCents)
+                            : ''
+                    }
                     required
                 />
                 <small id="transaction-amount-hint">
@@ -116,8 +147,14 @@ function TransactionForm({ onAddTransaction }) {
             {error && <p className="form-error" role="alert">{error}</p>}
 
             <button className="submit-button" type="submit">
-                Adicionar transação
+                {transaction ? 'Salvar alterações' : 'Adicionar transação'}
             </button>
+
+            {transaction && (
+                <button type="button" onClick={onCancelEdit}>
+                    Cancelar edição
+                </button>
+            )}
         </form>
     )
 }

@@ -8,7 +8,11 @@ function formatDate(date) {
   return `${day}/${month}/${year}`
 }
 
-function TransactionList({ transactions, onDeleteTransaction }) {
+function TransactionList({
+  transactions,
+  onEditTransaction,
+  onDeleteTransaction,
+}) {
   if (transactions.length === 0) {
     return (
       <div className="empty-state">
@@ -44,13 +48,13 @@ function TransactionList({ transactions, onDeleteTransaction }) {
         <caption>Movimentações financeiras</caption>
 
         <thead>
-          <th scope="col">Ações</th>
           <tr>
             <th scope="col">Data</th>
             <th scope="col">Descrição</th>
             <th scope="col">Categoria</th>
             <th scope="col">Tipo</th>
             <th scope="col" className="transaction-amount">Valor</th>
+            <th scope="col">Ações</th>
           </tr>
         </thead>
 
@@ -69,6 +73,13 @@ function TransactionList({ transactions, onDeleteTransaction }) {
                 {currencyFormatter.format(transaction.amountInCents / 100)}
               </td>
               <td>
+                <button
+                  type="button"
+                  onClick={() => onEditTransaction(transaction)}
+                  aria-label={`Editar ${transaction.description}`}
+                >
+                  Editar
+                </button>
                 <button
                   type="button"
                   onClick={() => handleDelete(transaction)}

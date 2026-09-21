@@ -7,6 +7,7 @@ function App() {
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [transactions, setTransactions] = useState([])
+  const [editingTransaction, setEditingTransaction] = useState(null)
 
   useEffect(() => {
     async function loadTransactions() {
@@ -28,45 +29,90 @@ function App() {
   }, [])
 
   async function handleAddTransaction(transactionData) {
-  const response = await fetch('http://localhost:3000/transactions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(transactionData),
-  })
+    const response = await fetch('http://localhost:3000/transactions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(transactionData),
+    })
 
-  const data = await response.json()
+    const data = await response.json()
 
-  if (!response.ok) {
-    throw new Error(data.error || 'Não foi possível cadastrar a transação.')
-  }
-
-  setTransactions((previous) => [data, ...previous])
-}
-
-async function handleDeleteTransaction(id) {
-  const response = await fetch(`http://localhost:3000/transactions/${id}`, {
-    method: 'DELETE',
-  })
-
-  if (!response.ok) {
-    let message = 'Não foi possível excluir a transação.'
-
-    try {
-      const data = await response.json()
-      message = data.error || message
-    } catch {
-      // Mantém a mensagem padrão se a resposta não possuir JSON válido.
+    if (!response.ok) {
+      throw new Error(data.error || 'Não foi possível cadastrar a transação.')
     }
 
-    throw new Error(message)
+    setTransactions((previous) =>
+      sortTransactions([data, ...previous]),
+    )
   }
 
-  setTransactions((previous) =>
-    previous.filter((transaction) => transaction.id !== id),
-  )
-}
+  async function handleUpdateTransaction(id, transactionData) {
+    const response = await fetch(
+      `http://localhost:3000/transactions/${id}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(transactionData),
+      },
+    )
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Não foi possível atualizar a transação.')
+    }
+
+    setTransactions((previous) =>
+      sortTransactions(
+        previous.map((transaction) =>
+          transaction.id === id ? data : transaction,
+        ),
+      ),
+    )
+
+    setEditingTransaction((current) =>
+      current?.id === id ? null : current,
+    )
+  }
+
+  function sortTransactions(transactions) {
+    return [...transactions].sort(
+      (first, second) =>
+        second.date.localeCompare(first.date) ||
+        second.id.localeCompare(first.id),
+    )
+  }
+
+  async function handleDeleteTransaction(id) {
+    const response = await fetch(`http://localhost:3000/transactions/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      let message = 'Não foi possível excluir a transação.'
+
+      try {
+        const data = await response.json()
+        message = data.error || message
+      } catch {
+        // Mantém a mensagem padrão se a resposta não possuir JSON válido.
+      }
+
+      throw new Error(message)
+    }
+
+    setTransactions((previous) =>
+      previous.filter((transaction) => transaction.id !== id),
+    )
+
+    setEditingTransaction((current) =>
+      current?.id === id ? null : current,
+    )
+  }
 
   return (
     <div className={`app-layout${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
@@ -124,12 +170,20 @@ async function handleDeleteTransaction(id) {
         </header>
 
         <section className="panel" aria-labelledby="new-transaction-title">
-          <h2 id="new-transaction-title">Nova transação</h2>
+          <h2 id="new-transaction-title">
+            {editingTransaction ? 'Editar transação' : 'Nova transação'}
+          </h2>
           <p className="prototype-notice">
-             Ambiente em desenvolvimento com persistência local.
+            Ambiente em desenvolvimento com persistência local.
           </p>
 
-          <TransactionForm onAddTransaction={handleAddTransaction} />
+          <TransactionForm
+            key={editingTransaction?.id ?? 'new'}
+            transaction={editingTransaction}
+            onAddTransaction={handleAddTransaction}
+            onUpdateTransaction={handleUpdateTransaction}
+            onCancelEdit={() => setEditingTransaction(null)}
+          />
         </section>
 
         <section className="panel" aria-labelledby="transactions-title">
@@ -137,6 +191,7 @@ async function handleDeleteTransaction(id) {
 
           <TransactionList
             transactions={transactions}
+            onEditTransaction={setEditingTransaction}
             onDeleteTransaction={handleDeleteTransaction}
           />
         </section>
