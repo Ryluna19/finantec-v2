@@ -12,14 +12,15 @@ function TransactionList({
   transactions,
   onEditTransaction,
   onDeleteTransaction,
+  emptyMessage = 'Nenhuma transação para exibir.',
 }) {
   if (transactions.length === 0) {
-    return (
-      <div className="empty-state">
-        <p>Nenhuma transação para exibir.</p>
-      </div>
-    )
-  }
+  return (
+    <div className="empty-state">
+      <p>{emptyMessage}</p>
+    </div>
+  )
+}
 
   async function handleDelete(transaction) {
     const confirmed = window.confirm(

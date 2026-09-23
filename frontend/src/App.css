@@ -280,8 +280,65 @@
   background-color: var(--accent-hover);
 }
 
+.transaction-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.transaction-filters select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+}
+
+.transaction-search-filter {
+  grid-column: 1 / -1;
+}
+
+.transaction-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg-main);
+}
+
+.summary-label {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.summary-card strong {
+  font-size: 1.125rem;
+}
+
 @media (max-width: 700px) {
   .transaction-form {
     grid-template-columns: 1fr;
   }
+
+  .transaction-filters {
+  grid-template-columns: 1fr;
+}
+
+  .transaction-summary {
+  grid-template-columns: 1fr;
+}
 }
