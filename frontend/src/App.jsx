@@ -19,7 +19,10 @@ function App() {
   const [selectedType, setSelectedType] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [descriptionQuery, setDescriptionQuery] = useState('')
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(true)
+  const [transactionsLoadError, setTransactionsLoadError] = useState(null)
   const transactionsRef = useRef([])
+  const mutationVersionRef = useRef(0)
 
   const filtersRef = useRef({
     year: currentYear,
@@ -30,7 +33,11 @@ function App() {
   })
 
   useEffect(() => {
+    let isActive = true
+
     async function loadTransactions() {
+      const mutationVersionAtStart = mutationVersionRef.current
+
       try {
         const response = await fetch('http://localhost:3000/transactions')
 
@@ -39,14 +46,36 @@ function App() {
         }
 
         const data = await response.json()
+
+        // Ignora uma execução antiga ou dados anteriores a uma mutação.
+        if (
+          !isActive ||
+          mutationVersionRef.current !== mutationVersionAtStart
+        ) {
+          return
+        }
+
         transactionsRef.current = data
         setTransactions(data)
       } catch (error) {
+        if (!isActive) {
+          return
+        }
+
         console.error(error)
+        setTransactionsLoadError('Não foi possível carregar as transações.')
+      } finally {
+        if (isActive) {
+          setIsLoadingTransactions(false)
+        }
       }
     }
 
     loadTransactions()
+
+    return () => {
+      isActive = false
+    }
   }, [])
 
   const availableYears = [
@@ -156,6 +185,7 @@ function App() {
         : updater
 
     transactionsRef.current = nextTransactions
+    mutationVersionRef.current += 1
     setTransactions(nextTransactions)
 
     return nextTransactions
@@ -466,37 +496,55 @@ function App() {
         >
           <h2 id="transactions-title">Movimentações</h2>
 
-          <TransactionFilters
-            years={availableYears}
-            types={availableTypes}
-            categories={availableCategories}
-            selectedYear={selectedYear}
-            selectedMonth={selectedMonth}
-            selectedType={selectedType}
-            selectedCategory={selectedCategory}
-            descriptionQuery={descriptionQuery}
-            onYearChange={handleYearChange}
-            onMonthChange={handleMonthChange}
-            onTypeChange={updateSelectedType}
-            onCategoryChange={updateSelectedCategory}
-            onDescriptionChange={updateDescriptionQuery}
-            showAdditionalFilters={periodTransactions.length > 0}
-          />
+          {isLoadingTransactions ? (
+            <div className="empty-state" role="status">
+              <p>Carregando transações...</p>
+            </div>
+          ) : (
+            <>
+              {transactionsLoadError && (
+                <div className="empty-state" role="alert">
+                  <p>{transactionsLoadError}</p>
+                </div>
+              )}
 
-          {periodTransactions.length > 0 && (
-            <TransactionSummary
-              transactionCount={transactionSummary.transactionCount}
-              incomeInCents={transactionSummary.incomeInCents}
-              expenseInCents={transactionSummary.expenseInCents}
-            />
+              {(!transactionsLoadError || transactions.length > 0) && (
+                <>
+                  <TransactionFilters
+                    years={availableYears}
+                    types={availableTypes}
+                    categories={availableCategories}
+                    selectedYear={selectedYear}
+                    selectedMonth={selectedMonth}
+                    selectedType={selectedType}
+                    selectedCategory={selectedCategory}
+                    descriptionQuery={descriptionQuery}
+                    onYearChange={handleYearChange}
+                    onMonthChange={handleMonthChange}
+                    onTypeChange={updateSelectedType}
+                    onCategoryChange={updateSelectedCategory}
+                    onDescriptionChange={updateDescriptionQuery}
+                    showAdditionalFilters={periodTransactions.length > 0}
+                  />
+
+                  {periodTransactions.length > 0 && (
+                    <TransactionSummary
+                      transactionCount={transactionSummary.transactionCount}
+                      incomeInCents={transactionSummary.incomeInCents}
+                      expenseInCents={transactionSummary.expenseInCents}
+                    />
+                  )}
+
+                  <TransactionList
+                    transactions={filteredTransactions}
+                    onEditTransaction={setEditingTransaction}
+                    onDeleteTransaction={handleDeleteTransaction}
+                    emptyMessage={emptyTransactionMessage}
+                  />
+                </>
+              )}
+            </>
           )}
-
-          <TransactionList
-            transactions={filteredTransactions}
-            onEditTransaction={setEditingTransaction}
-            onDeleteTransaction={handleDeleteTransaction}
-            emptyMessage={emptyTransactionMessage}
-          />
         </section>
       </main>
     </div>

@@ -1,5 +1,4 @@
-import { useState } from 'react'
-
+import { useRef, useState } from 'react'
 
 function formatAmountForInput(amountInCents) {
     const whole = Math.floor(amountInCents / 100)
@@ -15,10 +14,15 @@ function TransactionForm({
     onCancelEdit,
 }) {
     const [error, setError] = useState('')
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const submitInProgressRef = useRef(false)
 
     async function handleSubmit(event) {
         event.preventDefault()
 
+        if (submitInProgressRef.current) {
+            return
+        }
         const form = event.currentTarget
         const formData = new FormData(form)
         const date = formData.get('date')
@@ -56,6 +60,8 @@ function TransactionForm({
             setError('Informe um valor positivo dentro do limite permitido.')
             return
         }
+        submitInProgressRef.current = true
+        setIsSubmitting(true)
 
         try {
             const transactionData = {
@@ -74,13 +80,21 @@ function TransactionForm({
             }
 
             setError('')
+
         } catch (error) {
             setError(error.message)
+        } finally {
+            submitInProgressRef.current = false
+            setIsSubmitting(false)
         }
     }
 
     return (
-        <form className="transaction-form" onSubmit={handleSubmit}>
+        <form
+            className="transaction-form"
+            onSubmit={handleSubmit}
+            aria-busy={isSubmitting}
+        >
             <div className="form-field">
                 <label htmlFor="transaction-date">Data</label>
                 <input
@@ -88,6 +102,7 @@ function TransactionForm({
                     name="date"
                     type="date"
                     defaultValue={transaction?.date ?? ''}
+                    disabled={isSubmitting}
                     required
                 />
             </div>
@@ -97,6 +112,7 @@ function TransactionForm({
                     id="transaction-description"
                     name="description"
                     defaultValue={transaction?.description ?? ''}
+                    disabled={isSubmitting}
                     required
                 />
             </div>
@@ -107,6 +123,7 @@ function TransactionForm({
                     id="transaction-category"
                     name="category"
                     defaultValue={transaction?.category ?? ''}
+                    disabled={isSubmitting}
                     required
                 />
             </div>
@@ -117,6 +134,7 @@ function TransactionForm({
                     id="transaction-type"
                     name="type"
                     defaultValue={transaction?.type ?? 'expense'}
+                    disabled={isSubmitting}
                 >
                     <option value="expense">Despesa</option>
                     <option value="income">Receita</option>
@@ -136,7 +154,9 @@ function TransactionForm({
                         transaction
                             ? formatAmountForInput(transaction.amountInCents)
                             : ''
+
                     }
+                    disabled={isSubmitting}
                     required
                 />
                 <small id="transaction-amount-hint">
@@ -146,12 +166,26 @@ function TransactionForm({
 
             {error && <p className="form-error" role="alert">{error}</p>}
 
-            <button className="submit-button" type="submit">
-                {transaction ? 'Salvar alterações' : 'Adicionar transação'}
+            <button
+                className="submit-button"
+                type="submit"
+                disabled={isSubmitting}
+            >
+                {isSubmitting
+                    ? transaction
+                        ? 'Salvando...'
+                        : 'Adicionando...'
+                    : transaction
+                        ? 'Salvar alterações'
+                        : 'Adicionar transação'}
             </button>
 
             {transaction && (
-                <button type="button" onClick={onCancelEdit}>
+                <button
+                    type="button"
+                    onClick={onCancelEdit}
+                    disabled={isSubmitting}
+                >
                     Cancelar edição
                 </button>
             )}
