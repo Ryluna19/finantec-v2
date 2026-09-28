@@ -487,6 +487,85 @@ test('GET /auth/me returns 401 for a missing or invalid session', async () => {
   assert.equal(queryCalls, 1)
 })
 
+test('POST /auth/logout revokes the current session and clears the cookie', async () => {
+  const sessionToken = 'valid-session-token'
+  const expectedTokenHash = hashSessionToken(sessionToken)
+
+  let queryCalls = 0
+  let receivedSql
+  let receivedParams
+
+  const database = createFakeDatabase(async (sql, params) => {
+    queryCalls += 1
+    receivedSql = sql
+    receivedParams = params
+
+    return {
+      rowCount: 1,
+      rows: [],
+    }
+  })
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .post('/auth/logout')
+    .set('Cookie', `finantec_session=${sessionToken}`)
+
+  assert.equal(response.status, 204)
+  assert.equal(response.text, '')
+
+  assert.equal(queryCalls, 1)
+  assert.match(receivedSql, /DELETE FROM sessions/)
+
+  assert.equal(Buffer.isBuffer(receivedParams[0]), true)
+  assert.equal(
+    receivedParams[0].equals(expectedTokenHash),
+    true,
+  )
+
+  const cookies = response.headers['set-cookie']
+
+  assert.equal(Array.isArray(cookies), true)
+  assert.equal(cookies.length, 1)
+  assert.match(cookies[0], /^finantec_session=/)
+  assert.match(cookies[0], /HttpOnly/)
+  assert.match(cookies[0], /SameSite=Lax/)
+  assert.match(cookies[0], /Path=\//)
+})
+
+test('POST /auth/logout succeeds without a session cookie', async () => {
+  let queryCalls = 0
+
+  const database = createFakeDatabase(async () => {
+    queryCalls += 1
+
+    return {
+      rows: [],
+    }
+  })
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .post('/auth/logout')
+
+  assert.equal(response.status, 204)
+  assert.equal(response.text, '')
+
+  assert.equal(queryCalls, 0)
+
+  const cookies = response.headers['set-cookie']
+
+  assert.equal(Array.isArray(cookies), true)
+  assert.equal(cookies.length, 1)
+  assert.match(cookies[0], /^finantec_session=/)
+})
+
 test('POST /transactions rejects a request without a body', async () => {
   let queryCalls = 0
 

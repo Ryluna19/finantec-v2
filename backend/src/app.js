@@ -438,6 +438,51 @@ export function createApp({ database }) {
     }
   })
 
+    app.post('/auth/logout', async (request, response) => {
+    const sessionToken = getCookieValue(
+      request,
+      SESSION_COOKIE_NAME,
+    )
+
+    if (!sessionToken) {
+      response.clearCookie(SESSION_COOKIE_NAME, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+      })
+
+      return response.status(204).send()
+    }
+
+    try {
+      const sessionTokenHash = hashSessionToken(sessionToken)
+
+      await database.query(
+        `
+          DELETE FROM sessions
+          WHERE token_hash = $1
+        `,
+        [sessionTokenHash],
+      )
+
+      response.clearCookie(SESSION_COOKIE_NAME, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+      })
+
+      return response.status(204).send()
+    } catch (error) {
+      console.error('Failed to logout user:', error)
+
+      return response.status(500).json({
+        error: 'Não foi possível encerrar a sessão.',
+      })
+    }
+  })
+
   app.get('/transactions', async (request, response) => {
     try {
       const result = await database.query(`
