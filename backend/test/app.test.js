@@ -27,6 +27,146 @@ test('GET /health returns API status without accessing the database', async () =
   })
 })
 
+test('POST /auth/register creates the user and session', async () => {
+  let queryCalls = 0
+  let receivedSql
+  let receivedParams
+
+  const database = createFakeDatabase(async (sql, params) => {
+    queryCalls += 1
+    receivedSql = sql
+    receivedParams = params
+
+    return {
+      rowCount: 1,
+      rows: [
+        {
+          id: params[0],
+          username: params[1],
+        },
+      ],
+    }
+  })
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .post('/auth/register')
+    .send({
+      username: '  Ryan_19  ',
+      password: ' senha123 ',
+    })
+
+  assert.equal(response.status, 201)
+
+  assert.deepEqual(response.body, {
+    user: {
+      id: response.body.user.id,
+      username: 'Ryan_19',
+    },
+  })
+
+  assert.match(
+    response.body.user.id,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  )
+
+  assert.equal(queryCalls, 1)
+
+  assert.match(receivedSql, /INSERT INTO users/)
+  assert.match(receivedSql, /INSERT INTO sessions/)
+
+  assert.equal(receivedParams[0], response.body.user.id)
+  assert.equal(receivedParams[1], 'Ryan_19')
+
+  assert.equal(typeof receivedParams[2], 'string')
+  assert.match(receivedParams[2], /^scrypt\$v1\$/)
+  assert.notEqual(receivedParams[2], ' senha123 ')
+
+  assert.equal(Buffer.isBuffer(receivedParams[3]), true)
+  assert.equal(receivedParams[3].length, 32)
+
+  assert.equal(receivedParams[4] instanceof Date, true)
+
+  const cookies = response.headers['set-cookie']
+
+  assert.equal(Array.isArray(cookies), true)
+  assert.equal(cookies.length, 1)
+  assert.match(cookies[0], /^finantec_session=/)
+  assert.match(cookies[0], /HttpOnly/)
+  assert.match(cookies[0], /SameSite=Lax/)
+  assert.match(cookies[0], /Path=\//)
+  assert.match(cookies[0], /Expires=/)
+})
+
+test('POST /auth/register rejects invalid input before accessing the database', async () => {
+  let queryCalls = 0
+
+  const database = createFakeDatabase(async () => {
+    queryCalls += 1
+
+    return {
+      rows: [],
+    }
+  })
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .post('/auth/register')
+    .send({
+      username: 'ab',
+      password: 'senha123',
+    })
+
+  assert.equal(response.status, 400)
+
+  assert.deepEqual(response.body, {
+    error: 'Informe um nome de usuário válido.',
+  })
+
+  assert.equal(queryCalls, 0)
+  assert.equal(response.headers['set-cookie'], undefined)
+})
+
+test('POST /auth/register returns 409 when the username is already in use', async () => {
+  let queryCalls = 0
+
+  const database = createFakeDatabase(async () => {
+    queryCalls += 1
+
+    const error = new Error('Duplicate username')
+    error.code = '23505'
+    error.constraint = 'idx_users_username_lower'
+
+    throw error
+  })
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .post('/auth/register')
+    .send({
+      username: 'Ryan',
+      password: 'senha123',
+    })
+
+  assert.equal(response.status, 409)
+
+  assert.deepEqual(response.body, {
+    error: 'Nome de usuário já está em uso.',
+  })
+
+  assert.equal(queryCalls, 1)
+  assert.equal(response.headers['set-cookie'], undefined)
+})
+
 test('POST /transactions creates a valid transaction', async () => {
   let receivedSql
   let receivedParams

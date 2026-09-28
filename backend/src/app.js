@@ -1,6 +1,14 @@
 import express from 'express'
 import cors from 'cors'
 import { randomUUID } from 'node:crypto'
+import { hashPassword } from './password.js'
+import {
+  createSessionToken,
+  hashSessionToken,
+} from './session.js'
+
+const SESSION_DURATION_IN_MS = 7 * 24 * 60 * 60 * 1000
+const SESSION_COOKIE_NAME = 'finantec_session'
 
 export function createApp({ database }) {
   const app = express()
@@ -33,6 +41,44 @@ export function createApp({ database }) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       value,
     )
+  }
+
+  function validateRegistrationInput({ username, password } = {}) {
+    if (typeof username !== 'string') {
+      return {
+        error: 'Informe um nome de usuário válido.',
+      }
+    }
+
+    const normalizedUsername = username.trim()
+
+    if (
+      normalizedUsername.length < 3 ||
+      normalizedUsername.length > 50 ||
+      !/^[A-Za-z0-9._-]+$/.test(normalizedUsername)
+    ) {
+      return {
+        error: 'Informe um nome de usuário válido.',
+      }
+    }
+
+    if (
+      typeof password !== 'string' ||
+      Array.from(password).length < 8 ||
+      Array.from(password).length > 128 ||
+      password.trim().length === 0
+    ) {
+      return {
+        error: 'Informe uma senha válida.',
+      }
+    }
+
+    return {
+      registration: {
+        username: normalizedUsername,
+        password,
+      },
+    }
   }
 
   // Cadastro e edição compartilham as mesmas regras de validação.
@@ -94,6 +140,99 @@ export function createApp({ database }) {
     return response.json({
       status: 'ok',
     })
+  })
+
+    app.post('/auth/register', async (request, response) => {
+    const validation = validateRegistrationInput(request.body)
+
+    if (validation.error) {
+      return response.status(400).json({
+        error: validation.error,
+      })
+    }
+
+    const { username, password } = validation.registration
+
+    try {
+      const userId = randomUUID()
+      const passwordHash = await hashPassword(password)
+
+      const sessionToken = createSessionToken()
+      const sessionTokenHash = hashSessionToken(sessionToken)
+      const expiresAt = new Date(Date.now() + SESSION_DURATION_IN_MS)
+
+      const result = await database.query(
+        `
+          WITH inserted_user AS (
+            INSERT INTO users (
+              id,
+              username,
+              password_hash
+            )
+            VALUES ($1, $2, $3)
+            RETURNING id, username
+          ),
+          inserted_session AS (
+            INSERT INTO sessions (
+              token_hash,
+              user_id,
+              expires_at
+            )
+            SELECT
+              $4,
+              id,
+              $5
+            FROM inserted_user
+            RETURNING user_id
+          )
+          SELECT
+            inserted_user.id,
+            inserted_user.username
+          FROM inserted_user
+          INNER JOIN inserted_session
+            ON inserted_session.user_id = inserted_user.id
+        `,
+        [
+          userId,
+          username,
+          passwordHash,
+          sessionTokenHash,
+          expiresAt,
+        ],
+      )
+
+      const user = result.rows[0]
+
+      response.cookie(SESSION_COOKIE_NAME, sessionToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        expires: expiresAt,
+        path: '/',
+      })
+
+      return response.status(201).json({
+        user: {
+          id: user.id,
+          username: user.username,
+        },
+      })
+    } catch (error) {
+      if (
+        error.code === '23505' &&
+        error.constraint === 'idx_users_username_lower'
+      ) {
+        return response.status(409).json({
+          error: 'Nome de usuário já está em uso.',
+        })
+      }
+
+      console.error('Failed to register user:', error)
+
+      return response.status(500).json({
+        error: 'Não foi possível criar a conta.',
+      })
+    }
   })
 
   app.get('/transactions', async (request, response) => {
