@@ -110,6 +110,32 @@ export function createApp({ database }) {
     }
   }
 
+    function getCookieValue(request, cookieName) {
+    const cookieHeader = request.headers.cookie
+
+    if (typeof cookieHeader !== 'string') {
+      return null
+    }
+
+    const cookies = cookieHeader.split(';')
+
+    for (const cookie of cookies) {
+      const separatorIndex = cookie.indexOf('=')
+
+      if (separatorIndex === -1) {
+        continue
+      }
+
+      const name = cookie.slice(0, separatorIndex).trim()
+
+      if (name === cookieName) {
+        return cookie.slice(separatorIndex + 1)
+      }
+    }
+
+    return null
+  }
+
   // Cadastro e edição compartilham as mesmas regras de validação.
   function validateTransactionInput({
     date,
@@ -356,6 +382,58 @@ export function createApp({ database }) {
 
       return response.status(500).json({
         error: 'Não foi possível entrar na conta.',
+      })
+    }
+  })
+
+    app.get('/auth/me', async (request, response) => {
+    const sessionToken = getCookieValue(
+      request,
+      SESSION_COOKIE_NAME,
+    )
+
+    if (!sessionToken) {
+      return response.status(401).json({
+        error: 'Sessão inválida ou expirada.',
+      })
+    }
+
+    try {
+      const sessionTokenHash = hashSessionToken(sessionToken)
+
+      const result = await database.query(
+        `
+          SELECT
+            users.id,
+            users.username
+          FROM sessions
+          INNER JOIN users
+            ON users.id = sessions.user_id
+          WHERE sessions.token_hash = $1
+            AND sessions.expires_at > NOW()
+        `,
+        [sessionTokenHash],
+      )
+
+      if (result.rowCount === 0) {
+        return response.status(401).json({
+          error: 'Sessão inválida ou expirada.',
+        })
+      }
+
+      const user = result.rows[0]
+
+      return response.json({
+        user: {
+          id: user.id,
+          username: user.username,
+        },
+      })
+    } catch (error) {
+      console.error('Failed to load authenticated user:', error)
+
+      return response.status(500).json({
+        error: 'Não foi possível verificar a sessão.',
       })
     }
   })

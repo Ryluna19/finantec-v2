@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import request from 'supertest'
 import { createApp } from '../src/app.js'
 import { hashPassword } from '../src/password.js'
+import { hashSessionToken } from '../src/session.js'
 
 function createFakeDatabase(queryImplementation) {
   return {
@@ -391,6 +392,99 @@ test('POST /auth/login returns the same 401 for an unknown username', async () =
 
   assert.equal(queryCalls, 1)
   assert.equal(response.headers['set-cookie'], undefined)
+})
+
+test('GET /auth/me returns the authenticated user for a valid session', async () => {
+  const sessionToken = 'valid-session-token'
+  const expectedTokenHash = hashSessionToken(sessionToken)
+
+  let queryCalls = 0
+  let receivedSql
+  let receivedParams
+
+  const database = createFakeDatabase(async (sql, params) => {
+    queryCalls += 1
+    receivedSql = sql
+    receivedParams = params
+
+    return {
+      rowCount: 1,
+      rows: [
+        {
+          id: '6b959525-67fc-453c-b4b2-956058724f22',
+          username: 'Ryan',
+        },
+      ],
+    }
+  })
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .get('/auth/me')
+    .set('Cookie', `finantec_session=${sessionToken}`)
+
+  assert.equal(response.status, 200)
+
+  assert.deepEqual(response.body, {
+    user: {
+      id: '6b959525-67fc-453c-b4b2-956058724f22',
+      username: 'Ryan',
+    },
+  })
+
+  assert.equal(queryCalls, 1)
+
+  assert.match(receivedSql, /FROM sessions/)
+  assert.match(receivedSql, /sessions\.expires_at > NOW\(\)/)
+
+  assert.equal(Buffer.isBuffer(receivedParams[0]), true)
+  assert.equal(
+    receivedParams[0].equals(expectedTokenHash),
+    true,
+  )
+})
+
+test('GET /auth/me returns 401 for a missing or invalid session', async () => {
+  let queryCalls = 0
+
+  const database = createFakeDatabase(async () => {
+    queryCalls += 1
+
+    return {
+      rowCount: 0,
+      rows: [],
+    }
+  })
+
+  const app = createApp({
+    database,
+  })
+
+  const missingSessionResponse = await request(app)
+    .get('/auth/me')
+
+  assert.equal(missingSessionResponse.status, 401)
+
+  assert.deepEqual(missingSessionResponse.body, {
+    error: 'Sessão inválida ou expirada.',
+  })
+
+  assert.equal(queryCalls, 0)
+
+  const invalidSessionResponse = await request(app)
+    .get('/auth/me')
+    .set('Cookie', 'finantec_session=invalid-session-token')
+
+  assert.equal(invalidSessionResponse.status, 401)
+
+  assert.deepEqual(invalidSessionResponse.body, {
+    error: 'Sessão inválida ou expirada.',
+  })
+
+  assert.equal(queryCalls, 1)
 })
 
 test('POST /transactions rejects a request without a body', async () => {
