@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import { randomUUID } from 'node:crypto'
-import { hashPassword } from './password.js'
+import { hashPassword, verifyPassword } from './password.js'
 import {
   createSessionToken,
   hashSessionToken,
@@ -77,6 +77,35 @@ export function createApp({ database }) {
       registration: {
         username: normalizedUsername,
         password,
+      },
+    }
+  }
+
+    function validateLoginInput({ username, password } = {}) {
+    if (
+      typeof username !== 'string' ||
+      typeof password !== 'string'
+    ) {
+      return {
+        error: 'Informe nome de usuário e senha.',
+      }
+    }
+
+    const normalizedUsername = username.trim()
+
+    const credentialsAreValid =
+      normalizedUsername.length >= 3 &&
+      normalizedUsername.length <= 50 &&
+      /^[A-Za-z0-9._-]+$/.test(normalizedUsername) &&
+      Array.from(password).length >= 8 &&
+      Array.from(password).length <= 128 &&
+      password.trim().length > 0
+
+    return {
+      login: {
+        username: normalizedUsername,
+        password,
+        credentialsAreValid,
       },
     }
   }
@@ -231,6 +260,102 @@ export function createApp({ database }) {
 
       return response.status(500).json({
         error: 'Não foi possível criar a conta.',
+      })
+    }
+  })
+
+    app.post('/auth/login', async (request, response) => {
+    const validation = validateLoginInput(request.body)
+
+    if (validation.error) {
+      return response.status(400).json({
+        error: validation.error,
+      })
+    }
+
+    const {
+      username,
+      password,
+      credentialsAreValid,
+    } = validation.login
+
+    if (!credentialsAreValid) {
+      return response.status(401).json({
+        error: 'Nome de usuário ou senha inválidos.',
+      })
+    }
+
+    try {
+      const result = await database.query(
+        `
+          SELECT
+            id,
+            username,
+            password_hash
+          FROM users
+          WHERE lower(username) = lower($1)
+        `,
+        [username],
+      )
+
+      if (result.rowCount === 0) {
+        return response.status(401).json({
+          error: 'Nome de usuário ou senha inválidos.',
+        })
+      }
+
+      const user = result.rows[0]
+
+      const passwordIsValid = await verifyPassword(
+        password,
+        user.password_hash,
+      )
+
+      if (!passwordIsValid) {
+        return response.status(401).json({
+          error: 'Nome de usuário ou senha inválidos.',
+        })
+      }
+
+      const sessionToken = createSessionToken()
+      const sessionTokenHash = hashSessionToken(sessionToken)
+      const expiresAt = new Date(Date.now() + SESSION_DURATION_IN_MS)
+
+      await database.query(
+        `
+          INSERT INTO sessions (
+            token_hash,
+            user_id,
+            expires_at
+          )
+          VALUES ($1, $2, $3)
+        `,
+        [
+          sessionTokenHash,
+          user.id,
+          expiresAt,
+        ],
+      )
+
+      response.cookie(SESSION_COOKIE_NAME, sessionToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        expires: expiresAt,
+        path: '/',
+      })
+
+      return response.json({
+        user: {
+          id: user.id,
+          username: user.username,
+        },
+      })
+    } catch (error) {
+      console.error('Failed to login user:', error)
+
+      return response.status(500).json({
+        error: 'Não foi possível entrar na conta.',
       })
     }
   })

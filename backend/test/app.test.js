@@ -3,6 +3,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import { createApp } from '../src/app.js'
+import { hashPassword } from '../src/password.js'
 
 function createFakeDatabase(queryImplementation) {
   return {
@@ -231,6 +232,165 @@ test('POST /transactions creates a valid transaction', async () => {
   ])
 
   assert.match(receivedSql, /INSERT INTO transactions/)
+})
+
+test('POST /auth/login authenticates the user and creates a session', async () => {
+  const passwordHash = await hashPassword('senha123')
+
+  let queryCalls = 0
+  let loginSql
+  let loginParams
+  let sessionParams
+
+  const database = createFakeDatabase(async (sql, params) => {
+    queryCalls += 1
+
+    if (sql.includes('FROM users')) {
+      loginSql = sql
+      loginParams = params
+
+      return {
+        rowCount: 1,
+        rows: [
+          {
+            id: '6b959525-67fc-453c-b4b2-956058724f22',
+            username: 'Ryan',
+            password_hash: passwordHash,
+          },
+        ],
+      }
+    }
+
+    if (sql.includes('INSERT INTO sessions')) {
+      sessionParams = params
+
+      return {
+        rowCount: 1,
+        rows: [],
+      }
+    }
+
+    throw new Error('Unexpected database query')
+  })
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .post('/auth/login')
+    .send({
+      username: '  RYAN  ',
+      password: 'senha123',
+    })
+
+  assert.equal(response.status, 200)
+
+  assert.deepEqual(response.body, {
+    user: {
+      id: '6b959525-67fc-453c-b4b2-956058724f22',
+      username: 'Ryan',
+    },
+  })
+
+  assert.equal(queryCalls, 2)
+
+  assert.match(
+    loginSql,
+    /WHERE lower\(username\) = lower\(\$1\)/,
+  )
+  assert.deepEqual(loginParams, ['RYAN'])
+
+  assert.equal(Buffer.isBuffer(sessionParams[0]), true)
+  assert.equal(sessionParams[0].length, 32)
+  assert.equal(
+    sessionParams[1],
+    '6b959525-67fc-453c-b4b2-956058724f22',
+  )
+  assert.equal(sessionParams[2] instanceof Date, true)
+
+  const cookies = response.headers['set-cookie']
+
+  assert.equal(Array.isArray(cookies), true)
+  assert.equal(cookies.length, 1)
+  assert.match(cookies[0], /^finantec_session=/)
+  assert.match(cookies[0], /HttpOnly/)
+  assert.match(cookies[0], /SameSite=Lax/)
+  assert.match(cookies[0], /Expires=/)
+})
+
+test('POST /auth/login rejects an incorrect password', async () => {
+  const passwordHash = await hashPassword('senha123')
+
+  let queryCalls = 0
+
+  const database = createFakeDatabase(async () => {
+    queryCalls += 1
+
+    return {
+      rowCount: 1,
+      rows: [
+        {
+          id: '6b959525-67fc-453c-b4b2-956058724f22',
+          username: 'Ryan',
+          password_hash: passwordHash,
+        },
+      ],
+    }
+  })
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .post('/auth/login')
+    .send({
+      username: 'Ryan',
+      password: 'senha999',
+    })
+
+  assert.equal(response.status, 401)
+
+  assert.deepEqual(response.body, {
+    error: 'Nome de usuário ou senha inválidos.',
+  })
+
+  assert.equal(queryCalls, 1)
+  assert.equal(response.headers['set-cookie'], undefined)
+})
+
+test('POST /auth/login returns the same 401 for an unknown username', async () => {
+  let queryCalls = 0
+
+  const database = createFakeDatabase(async () => {
+    queryCalls += 1
+
+    return {
+      rowCount: 0,
+      rows: [],
+    }
+  })
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .post('/auth/login')
+    .send({
+      username: 'UnknownUser',
+      password: 'senha123',
+    })
+
+  assert.equal(response.status, 401)
+
+  assert.deepEqual(response.body, {
+    error: 'Nome de usuário ou senha inválidos.',
+  })
+
+  assert.equal(queryCalls, 1)
+  assert.equal(response.headers['set-cookie'], undefined)
 })
 
 test('POST /transactions rejects a request without a body', async () => {
