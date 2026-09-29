@@ -306,6 +306,7 @@ function App() {
 
   async function handleAddTransaction(transactionData) {
     const response = await fetch('http://localhost:3000/transactions', {
+      credentials: 'include',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -330,6 +331,7 @@ function App() {
     const response = await fetch(
       `http://localhost:3000/transactions/${id}`,
       {
+        credentials: 'include',
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -364,6 +366,7 @@ function App() {
     const response = await fetch(
       `http://localhost:3000/transactions/${id}`,
       {
+        credentials: 'include',
         method: 'DELETE',
       },
     )

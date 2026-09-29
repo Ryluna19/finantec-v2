@@ -16,6 +16,7 @@ export function createApp({ database }) {
   app.use(
     cors({
       origin: 'http://localhost:5173',
+      credentials: true,
     }),
   )
 
