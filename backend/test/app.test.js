@@ -1,7 +1,7 @@
-
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
+
 import { createApp } from '../src/app.js'
 import { hashPassword } from '../src/password.js'
 import { hashSessionToken } from '../src/session.js'
@@ -10,6 +10,29 @@ function createFakeDatabase(queryImplementation) {
   return {
     query: queryImplementation,
   }
+}
+
+const AUTHENTICATED_USER = {
+  id: '6b959525-67fc-453c-b4b2-956058724f22',
+  username: 'Ryan',
+}
+
+const AUTHENTICATED_SESSION_TOKEN = 'valid-session-token'
+
+function createAuthenticatedDatabase(queryImplementation) {
+  return createFakeDatabase(async (sql, params) => {
+    if (
+      sql.includes('FROM sessions') &&
+      sql.includes('sessions.expires_at > NOW()')
+    ) {
+      return {
+        rowCount: 1,
+        rows: [AUTHENTICATED_USER],
+      }
+    }
+
+    return queryImplementation(sql, params)
+  })
 }
 
 test('GET /health returns API status without accessing the database', async () => {
@@ -24,6 +47,7 @@ test('GET /health returns API status without accessing the database', async () =
   const response = await request(app).get('/health')
 
   assert.equal(response.status, 200)
+
   assert.deepEqual(response.body, {
     status: 'ok',
   })
@@ -173,7 +197,7 @@ test('POST /transactions creates a valid transaction', async () => {
   let receivedSql
   let receivedParams
 
-  const database = createFakeDatabase(async (sql, params) => {
+  const database = createAuthenticatedDatabase(async (sql, params) => {
     receivedSql = sql
     receivedParams = params
 
@@ -198,12 +222,17 @@ test('POST /transactions creates a valid transaction', async () => {
 
   const response = await request(app)
     .post('/transactions')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
     .send({
       date: '2026-09-21',
       description: '  Bolsa de estágio  ',
       category: '  Trabalho  ',
       type: 'income',
       amountInCents: 150000,
+      user_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     })
 
   assert.equal(response.status, 201)
@@ -224,15 +253,24 @@ test('POST /transactions creates a valid transaction', async () => {
 
   // Confirma que os valores normalizados são enviados ao banco.
   assert.deepEqual(receivedParams, [
-    response.body.id,
-    '2026-09-21',
-    'income',
-    'Bolsa de estágio',
-    'Trabalho',
-    150000,
-  ])
+  response.body.id,
+  AUTHENTICATED_USER.id,
+  '2026-09-21',
+  'income',
+  'Bolsa de estágio',
+  'Trabalho',
+  150000,
+])
 
-  assert.match(receivedSql, /INSERT INTO transactions/)
+  assert.match(
+  receivedSql,
+  /INSERT INTO transactions\s*\(\s*id,\s*user_id,\s*transaction_date/,
+)
+
+  assert.match(
+  receivedSql,
+  /VALUES\s*\(\s*\$1,\s*\$2,\s*\$3,\s*\$4,\s*\$5,\s*\$6,\s*\$7\s*\)/,
+)
 })
 
 test('POST /auth/login authenticates the user and creates a session', async () => {
@@ -300,14 +338,17 @@ test('POST /auth/login authenticates the user and creates a session', async () =
     loginSql,
     /WHERE lower\(username\) = lower\(\$1\)/,
   )
+
   assert.deepEqual(loginParams, ['RYAN'])
 
   assert.equal(Buffer.isBuffer(sessionParams[0]), true)
   assert.equal(sessionParams[0].length, 32)
+
   assert.equal(
     sessionParams[1],
     '6b959525-67fc-453c-b4b2-956058724f22',
   )
+
   assert.equal(sessionParams[2] instanceof Date, true)
 
   const cookies = response.headers['set-cookie']
@@ -424,7 +465,10 @@ test('GET /auth/me returns the authenticated user for a valid session', async ()
 
   const response = await request(app)
     .get('/auth/me')
-    .set('Cookie', `finantec_session=${sessionToken}`)
+    .set(
+      'Cookie',
+      `finantec_session=${sessionToken}`,
+    )
 
   assert.equal(response.status, 200)
 
@@ -438,9 +482,13 @@ test('GET /auth/me returns the authenticated user for a valid session', async ()
   assert.equal(queryCalls, 1)
 
   assert.match(receivedSql, /FROM sessions/)
-  assert.match(receivedSql, /sessions\.expires_at > NOW\(\)/)
+  assert.match(
+    receivedSql,
+    /sessions\.expires_at > NOW\(\)/,
+  )
 
   assert.equal(Buffer.isBuffer(receivedParams[0]), true)
+
   assert.equal(
     receivedParams[0].equals(expectedTokenHash),
     true,
@@ -476,7 +524,10 @@ test('GET /auth/me returns 401 for a missing or invalid session', async () => {
 
   const invalidSessionResponse = await request(app)
     .get('/auth/me')
-    .set('Cookie', 'finantec_session=invalid-session-token')
+    .set(
+      'Cookie',
+      'finantec_session=invalid-session-token',
+    )
 
   assert.equal(invalidSessionResponse.status, 401)
 
@@ -512,7 +563,10 @@ test('POST /auth/logout revokes the current session and clears the cookie', asyn
 
   const response = await request(app)
     .post('/auth/logout')
-    .set('Cookie', `finantec_session=${sessionToken}`)
+    .set(
+      'Cookie',
+      `finantec_session=${sessionToken}`,
+    )
 
   assert.equal(response.status, 204)
   assert.equal(response.text, '')
@@ -521,6 +575,7 @@ test('POST /auth/logout revokes the current session and clears the cookie', asyn
   assert.match(receivedSql, /DELETE FROM sessions/)
 
   assert.equal(Buffer.isBuffer(receivedParams[0]), true)
+
   assert.equal(
     receivedParams[0].equals(expectedTokenHash),
     true,
@@ -566,10 +621,43 @@ test('POST /auth/logout succeeds without a session cookie', async () => {
   assert.match(cookies[0], /^finantec_session=/)
 })
 
+test('transaction routes require authentication', async () => {
+  const database = createFakeDatabase(async () => {
+    throw new Error('Database should not be called')
+  })
+
+  const app = createApp({
+    database,
+  })
+
+  const routes = [
+    ['get', '/transactions'],
+    ['post', '/transactions'],
+    [
+      'put',
+      '/transactions/6b959525-67fc-453c-b4b2-956058724f22',
+    ],
+    [
+      'delete',
+      '/transactions/6b959525-67fc-453c-b4b2-956058724f22',
+    ],
+  ]
+
+  for (const [method, path] of routes) {
+    const response = await request(app)[method](path)
+
+    assert.equal(response.status, 401)
+
+    assert.deepEqual(response.body, {
+      error: 'Sessão inválida ou expirada.',
+    })
+  }
+})
+
 test('POST /transactions rejects a request without a body', async () => {
   let queryCalls = 0
 
-  const database = createFakeDatabase(async () => {
+  const database = createAuthenticatedDatabase(async () => {
     queryCalls += 1
 
     return {
@@ -581,22 +669,30 @@ test('POST /transactions rejects a request without a body', async () => {
     database,
   })
 
-  const response = await request(app).post('/transactions')
+  const response = await request(app)
+    .post('/transactions')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
 
   assert.equal(response.status, 400)
+
   assert.deepEqual(response.body, {
     error: 'Informe uma data válida.',
   })
 
-  // Entrada inválida deve ser rejeitada antes de acessar o banco.
+  // Entrada inválida deve ser rejeitada antes da query de transação.
   assert.equal(queryCalls, 0)
 })
 
 test('GET /transactions returns transactions using the API format', async () => {
   let receivedSql
+  let receivedParams
 
-  const database = createFakeDatabase(async (sql) => {
-    receivedSql = sql
+  const database = createAuthenticatedDatabase(async (sql, params) => {
+  receivedSql = sql
+  receivedParams = params
 
     return {
       rows: [
@@ -616,7 +712,12 @@ test('GET /transactions returns transactions using the API format', async () => 
     database,
   })
 
-  const response = await request(app).get('/transactions')
+  const response = await request(app)
+    .get('/transactions')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
 
   assert.equal(response.status, 200)
 
@@ -635,14 +736,24 @@ test('GET /transactions returns transactions using the API format', async () => 
     receivedSql,
     /ORDER BY transaction_date DESC, id DESC/,
   )
+  assert.match(
+    receivedSql,
+    /WHERE user_id = \$1/,
+  )
+
+  assert.deepEqual(receivedParams, [
+    AUTHENTICATED_USER.id,
+  ])
 })
 
 test('PUT /transactions/:id updates an existing transaction and preserves its id', async () => {
   const id = '6b959525-67fc-453c-b4b2-956058724f22'
 
+  let receivedSql
   let receivedParams
 
-  const database = createFakeDatabase(async (sql, params) => {
+  const database = createAuthenticatedDatabase(async (sql, params) => {
+    receivedSql = sql
     receivedParams = params
 
     return {
@@ -666,6 +777,10 @@ test('PUT /transactions/:id updates an existing transaction and preserves its id
 
   const response = await request(app)
     .put(`/transactions/${id}`)
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
     .send({
       date: '2026-09-22',
       description: '  Salário atualizado  ',
@@ -692,7 +807,12 @@ test('PUT /transactions/:id updates an existing transaction and preserves its id
     'Trabalho',
     500000,
     id,
+    AUTHENTICATED_USER.id,
   ])
+  assert.match(
+    receivedSql,
+    /WHERE id = \$6\s+AND user_id = \$7/,
+  )
 })
 
 test('PUT /transactions/:id returns 404 when the transaction does not exist', async () => {
@@ -700,7 +820,7 @@ test('PUT /transactions/:id returns 404 when the transaction does not exist', as
 
   let queryCalls = 0
 
-  const database = createFakeDatabase(async () => {
+  const database = createAuthenticatedDatabase(async () => {
     queryCalls += 1
 
     return {
@@ -715,6 +835,10 @@ test('PUT /transactions/:id returns 404 when the transaction does not exist', as
 
   const response = await request(app)
     .put(`/transactions/${id}`)
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
     .send({
       date: '2026-09-22',
       description: 'Teste',
@@ -737,9 +861,11 @@ test('DELETE /transactions/:id handles existing and missing transactions', async
   const id = '6b959525-67fc-453c-b4b2-956058724f22'
 
   let transactionExists = true
+  let receivedSql
   const receivedParams = []
 
-  const database = createFakeDatabase(async (sql, params) => {
+  const database = createAuthenticatedDatabase(async (sql, params) => {
+    receivedSql = sql
     receivedParams.push(params)
 
     if (transactionExists) {
@@ -763,12 +889,20 @@ test('DELETE /transactions/:id handles existing and missing transactions', async
 
   const firstResponse = await request(app)
     .delete(`/transactions/${id}`)
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
 
   assert.equal(firstResponse.status, 204)
   assert.equal(firstResponse.text, '')
 
   const secondResponse = await request(app)
     .delete(`/transactions/${id}`)
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
 
   assert.equal(secondResponse.status, 404)
 
@@ -777,15 +911,20 @@ test('DELETE /transactions/:id handles existing and missing transactions', async
   })
 
   assert.deepEqual(receivedParams, [
-    [id],
-    [id],
+    [id, AUTHENTICATED_USER.id],
+    [id, AUTHENTICATED_USER.id],
   ])
+
+  assert.match(
+    receivedSql,
+    /WHERE id = \$1\s+AND user_id = \$2/,
+  )
 })
 
 test('PUT and DELETE reject an invalid UUID before accessing the database', async () => {
   let queryCalls = 0
 
-  const database = createFakeDatabase(async () => {
+  const database = createAuthenticatedDatabase(async () => {
     queryCalls += 1
 
     return {
@@ -799,6 +938,10 @@ test('PUT and DELETE reject an invalid UUID before accessing the database', asyn
 
   const putResponse = await request(app)
     .put('/transactions/abc')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
     .send({
       date: '2026-09-22',
       description: 'Teste',
@@ -809,6 +952,10 @@ test('PUT and DELETE reject an invalid UUID before accessing the database', asyn
 
   const deleteResponse = await request(app)
     .delete('/transactions/abc')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
 
   assert.equal(putResponse.status, 400)
   assert.equal(deleteResponse.status, 400)
@@ -821,6 +968,6 @@ test('PUT and DELETE reject an invalid UUID before accessing the database', asyn
     error: 'Identificador de transação inválido.',
   })
 
-  // UUID inválido deve ser bloqueado antes de qualquer consulta.
+  // UUID inválido deve ser bloqueado antes de queries de transação.
   assert.equal(queryCalls, 0)
 })

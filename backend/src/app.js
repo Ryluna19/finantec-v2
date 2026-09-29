@@ -136,6 +136,56 @@ export function createApp({ database }) {
     return null
   }
 
+    async function requireAuthentication(request, response, next) {
+    const sessionToken = getCookieValue(
+      request,
+      SESSION_COOKIE_NAME,
+    )
+
+    if (!sessionToken) {
+      return response.status(401).json({
+        error: 'Sessão inválida ou expirada.',
+      })
+    }
+
+    try {
+      const sessionTokenHash = hashSessionToken(sessionToken)
+
+      const result = await database.query(
+        `
+          SELECT
+            users.id,
+            users.username
+          FROM sessions
+          INNER JOIN users
+            ON users.id = sessions.user_id
+          WHERE sessions.token_hash = $1
+            AND sessions.expires_at > NOW()
+        `,
+        [sessionTokenHash],
+      )
+
+      if (result.rowCount === 0) {
+        return response.status(401).json({
+          error: 'Sessão inválida ou expirada.',
+        })
+      }
+
+      request.user = {
+        id: result.rows[0].id,
+        username: result.rows[0].username,
+      }
+
+      return next()
+    } catch (error) {
+      console.error('Failed to authenticate session:', error)
+
+      return response.status(500).json({
+        error: 'Não foi possível verificar a sessão.',
+      })
+    }
+  }
+
   // Cadastro e edição compartilham as mesmas regras de validação.
   function validateTransactionInput({
     date,
@@ -385,57 +435,10 @@ export function createApp({ database }) {
       })
     }
   })
-
-    app.get('/auth/me', async (request, response) => {
-    const sessionToken = getCookieValue(
-      request,
-      SESSION_COOKIE_NAME,
-    )
-
-    if (!sessionToken) {
-      return response.status(401).json({
-        error: 'Sessão inválida ou expirada.',
-      })
-    }
-
-    try {
-      const sessionTokenHash = hashSessionToken(sessionToken)
-
-      const result = await database.query(
-        `
-          SELECT
-            users.id,
-            users.username
-          FROM sessions
-          INNER JOIN users
-            ON users.id = sessions.user_id
-          WHERE sessions.token_hash = $1
-            AND sessions.expires_at > NOW()
-        `,
-        [sessionTokenHash],
-      )
-
-      if (result.rowCount === 0) {
-        return response.status(401).json({
-          error: 'Sessão inválida ou expirada.',
-        })
-      }
-
-      const user = result.rows[0]
-
-      return response.json({
-        user: {
-          id: user.id,
-          username: user.username,
-        },
-      })
-    } catch (error) {
-      console.error('Failed to load authenticated user:', error)
-
-      return response.status(500).json({
-        error: 'Não foi possível verificar a sessão.',
-      })
-    }
+    app.get('/auth/me', requireAuthentication, (request, response) => {
+    return response.json({
+      user: request.user,
+    })
   })
 
     app.post('/auth/logout', async (request, response) => {
@@ -483,6 +486,8 @@ export function createApp({ database }) {
     }
   })
 
+  app.use('/transactions', requireAuthentication)
+  
   app.get('/transactions', async (request, response) => {
     try {
       const result = await database.query(`
@@ -493,9 +498,12 @@ export function createApp({ database }) {
           category,
           transaction_type AS type,
           amount_in_cents
-        FROM transactions
+                FROM transactions
+        WHERE user_id = $1
         ORDER BY transaction_date DESC, id DESC
-      `)
+      `,
+      [request.user.id],
+    )
 
       // Mantém o formato da API separado dos nomes usados no banco.
       const databaseTransactions = result.rows.map((transaction) => ({
@@ -541,13 +549,14 @@ export function createApp({ database }) {
         `
           INSERT INTO transactions (
             id,
+            user_id,
             transaction_date,
             transaction_type,
             description,
             category,
             amount_in_cents
           )
-          VALUES ($1, $2, $3, $4, $5, $6)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
           RETURNING
             id,
             to_char(transaction_date, 'YYYY-MM-DD') AS date,
@@ -558,6 +567,7 @@ export function createApp({ database }) {
         `,
         [
           id,
+          request.user.id,
           date,
           type,
           description,
@@ -621,6 +631,7 @@ export function createApp({ database }) {
             category = $4,
             amount_in_cents = $5
           WHERE id = $6
+           AND user_id = $7
           RETURNING
             id,
             to_char(transaction_date, 'YYYY-MM-DD') AS date,
@@ -636,6 +647,7 @@ export function createApp({ database }) {
           category,
           amountInCents,
           id,
+          request.user.id,
         ],
       )
 
@@ -678,9 +690,14 @@ export function createApp({ database }) {
         `
           DELETE FROM transactions
           WHERE id = $1
+           AND user_id = $2
           RETURNING id
         `,
-        [id],
+        [
+          id,
+          request.user.id,
+        ],
+        
       )
 
       if (result.rowCount === 0) {
