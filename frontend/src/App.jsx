@@ -839,6 +839,113 @@ function App() {
     }
   }
 
+  async function handleLogout() {
+    // Invalida imediatamente qualquer requisição pertencente
+    // à identidade que está saindo.
+    authGenerationRef.current += 1
+    const logoutGeneration = authGenerationRef.current
+
+    resetPrivateState()
+
+    setUser(null)
+    setAuthError(null)
+    setAuthStatus('loggingOut')
+
+    try {
+      const response = await fetch(
+        'http://localhost:3000/auth/logout',
+        {
+          method: 'POST',
+          credentials: 'include',
+        },
+      )
+
+      if (
+        authGenerationRef.current !== logoutGeneration
+      ) {
+        return
+      }
+
+      if (response.ok) {
+        setAuthStatus('unauthenticated')
+        return
+      }
+    } catch (error) {
+      if (
+        authGenerationRef.current !== logoutGeneration
+      ) {
+        return
+      }
+
+      console.error(error)
+    }
+
+    /*
+     * Se o logout falhou, não sabemos se a sessão continuou
+     * válida no servidor. Verificamos antes de decidir o que
+     * mostrar ao usuário.
+     */
+    try {
+      const response = await fetch(
+        'http://localhost:3000/auth/me',
+        {
+          credentials: 'include',
+        },
+      )
+
+      if (
+        authGenerationRef.current !== logoutGeneration
+      ) {
+        return
+      }
+
+      if (response.status === 401) {
+        setUser(null)
+        setAuthError(null)
+        setAuthStatus('unauthenticated')
+        return
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          'Não foi possível verificar a sessão após o logout.',
+        )
+      }
+
+      const data = await response.json()
+
+      if (
+        authGenerationRef.current !== logoutGeneration
+      ) {
+        return
+      }
+
+      if (!data?.user) {
+        throw new Error(
+          'Não foi possível verificar a sessão após o logout.',
+        )
+      }
+
+      // O logout falhou, mas a sessão anterior continua válida.
+      // Restaura a identidade e recarrega os dados dela.
+      activateAuthenticatedUser(data.user)
+    } catch (error) {
+      if (
+        authGenerationRef.current !== logoutGeneration
+      ) {
+        return
+      }
+
+      console.error(error)
+
+      setUser(null)
+      setAuthError(
+        'Não foi possível confirmar o encerramento da sessão.',
+      )
+      setAuthStatus('error')
+    }
+  }
+
   const emptyTransactionMessage =
     periodTransactions.length === 0
       ? 'Nenhuma transação encontrada para o período selecionado.'
@@ -856,6 +963,14 @@ function App() {
     return (
       <div className="empty-state" role="alert">
         <p>{authError}</p>
+      </div>
+    )
+  }
+
+  if (authStatus === 'loggingOut') {
+    return (
+      <div className="empty-state" role="status">
+        <p>Encerrando sessão...</p>
       </div>
     )
   }
@@ -949,10 +1064,19 @@ function App() {
         id="transactions"
       >
         <header className="page-header">
-          <h1>Transações</h1>
-          <p>
-            Organize suas receitas, despesas e reservas.
-          </p>
+          <div>
+            <h1>Transações</h1>
+            <p>
+              Organize suas receitas, despesas e reservas.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+          >
+            Sair
+          </button>
         </header>
 
         <section
