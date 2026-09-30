@@ -4,6 +4,7 @@ import TransactionForm from './components/TransactionForm'
 import TransactionFilters from './components/TransactionFilters'
 import TransactionSummary from './components/TransactionSummary'
 import AuthForm from './components/AuthForm'
+import { filterTransactionsByPeriod } from './transactionSelectors'
 import './App.css'
 
 function App() {
@@ -263,23 +264,11 @@ function App() {
     ]),
   ].sort((first, second) => second - first)
 
-  const periodTransactions = transactions.filter((transaction) => {
-    const transactionYear = Number(transaction.date.slice(0, 4))
-    const transactionMonth = Number(transaction.date.slice(5, 7))
-
-    if (transactionYear !== selectedYear) {
-      return false
-    }
-
-    if (
-      selectedMonth !== 'all' &&
-      transactionMonth !== selectedMonth
-    ) {
-      return false
-    }
-
-    return true
-  })
+  const periodTransactions = filterTransactionsByPeriod(
+    transactions,
+    selectedYear,
+    selectedMonth,
+  )
 
   const availableTypes = [
     ...new Set(
@@ -418,29 +407,10 @@ function App() {
       return
     }
 
-    const nextPeriodTransactions = nextTransactions.filter(
-      (transaction) => {
-        const transactionYear = Number(
-          transaction.date.slice(0, 4),
-        )
-
-        const transactionMonth = Number(
-          transaction.date.slice(5, 7),
-        )
-
-        if (transactionYear !== filters.year) {
-          return false
-        }
-
-        if (
-          filters.month !== 'all' &&
-          transactionMonth !== filters.month
-        ) {
-          return false
-        }
-
-        return true
-      },
+    const nextPeriodTransactions = filterTransactionsByPeriod(
+      nextTransactions,
+      filters.year,
+      filters.month,
     )
 
     const nextAvailableTypes = [
