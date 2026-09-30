@@ -6,6 +6,7 @@ import {
     render,
     screen,
     waitFor,
+    within,
 } from '@testing-library/react'
 import App from './App'
 
@@ -1316,6 +1317,304 @@ describe('App transactions', () => {
 
         expect(authMeCount).toBe(2)
         expect(transactionsGetCount).toBe(2)
+    })
+
+    it('reconciles the selected period after updating its last transaction to another year', async () => {
+        const today = new Date()
+        const currentYear = today.getFullYear()
+        const previousYear = currentYear - 1
+        const currentMonth = today.getMonth() + 1
+        const currentMonthText = String(currentMonth).padStart(2, '0')
+
+        const previousYearTransaction = {
+            id: '31313131-3131-4313-8313-313131313131',
+            date: `${previousYear}-01-15`,
+            description: 'Transação do ano anterior',
+            category: 'Trabalho',
+            type: 'income',
+            amountInCents: 10000,
+        }
+
+        const currentTransaction = {
+            id: '32323232-3232-4323-8323-323232323232',
+            date: `${currentYear}-${currentMonthText}-10`,
+            description: 'Transação atual',
+            category: 'Trabalho',
+            type: 'income',
+            amountInCents: 20000,
+        }
+
+        const movedTransaction = {
+            ...previousYearTransaction,
+            date: `${currentYear}-${currentMonthText}-20`,
+            description: 'Transação movida',
+        }
+
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        user: AUTHENTICATED_USER,
+                    }),
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => [
+                        currentTransaction,
+                        previousYearTransaction,
+                    ],
+                })
+            }
+
+            if (
+                url ===
+                `http://localhost:3000/transactions/${previousYearTransaction.id}` &&
+                options.method === 'PUT'
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => movedTransaction,
+                })
+            }
+
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
+
+        vi.stubGlobal('fetch', fetchMock)
+
+        render(<App />)
+
+        await screen.findByText('Transação atual')
+
+        fireEvent.change(screen.getByLabelText('Ano'), {
+            target: {
+                value: String(previousYear),
+            },
+        })
+
+        await screen.findByText('Transação do ano anterior')
+
+        expect(screen.getByLabelText('Mês').value).toBe('all')
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Editar Transação do ano anterior',
+            }),
+        )
+
+        expect(
+            screen.getByRole('heading', {
+                name: 'Editar transação',
+            }),
+        ).toBeTruthy()
+
+        fireEvent.change(screen.getByLabelText('Data'), {
+            target: {
+                value: movedTransaction.date,
+            },
+        })
+
+        fireEvent.change(screen.getByLabelText('Descrição'), {
+            target: {
+                value: movedTransaction.description,
+            },
+        })
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Salvar alterações',
+            }),
+        )
+
+        await screen.findByText('Transação movida')
+
+        expect(screen.getByLabelText('Ano').value).toBe(
+            String(currentYear),
+        )
+
+        expect(screen.getByLabelText('Mês').value).toBe(
+            String(currentMonth),
+        )
+
+        expect(
+            screen.getByRole('heading', {
+                name: 'Nova transação',
+            }),
+        ).toBeTruthy()
+
+        const transactionList = screen.getByRole('region', {
+            name: 'Lista de transações',
+        })
+
+        const rows = within(transactionList).getAllByRole('row')
+
+        expect(
+            within(rows[1]).getByText('Transação movida'),
+        ).toBeTruthy()
+
+        expect(
+            within(rows[2]).getByText('Transação atual'),
+        ).toBeTruthy()
+
+        const summary = screen.getByLabelText(
+            'Resumo das transações filtradas',
+        )
+
+        expect(within(summary).getByText('2')).toBeTruthy()
+    })
+    it('reconciles the latest filters and closes editing after deleting the edited transaction', async () => {
+        const pendingDelete = createDeferredPromise()
+
+        const today = new Date()
+        const transactionDate = [
+            today.getFullYear(),
+            String(today.getMonth() + 1).padStart(2, '0'),
+            '15',
+        ].join('-')
+
+        const editedTransaction = {
+            id: '41414141-4141-4414-8414-414141414141',
+            date: transactionDate,
+            description: 'Mercado',
+            category: 'Casa',
+            type: 'expense',
+            amountInCents: 15000,
+        }
+
+        const remainingTransaction = {
+            id: '42424242-4242-4424-8424-424242424242',
+            date: transactionDate,
+            description: 'Freela',
+            category: 'Trabalho',
+            type: 'income',
+            amountInCents: 50000,
+        }
+
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        user: AUTHENTICATED_USER,
+                    }),
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => [
+                        editedTransaction,
+                        remainingTransaction,
+                    ],
+                })
+            }
+
+            if (
+                url ===
+                `http://localhost:3000/transactions/${editedTransaction.id}` &&
+                options.method === 'DELETE'
+            ) {
+                return pendingDelete.promise
+            }
+
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
+
+        vi.stubGlobal('fetch', fetchMock)
+
+        vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+        render(<App />)
+
+        await screen.findByText('Mercado')
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Editar Mercado',
+            }),
+        )
+
+        expect(
+            screen.getByRole('heading', {
+                name: 'Editar transação',
+            }),
+        ).toBeTruthy()
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Excluir Mercado',
+            }),
+        )
+
+        const filters = screen.getByLabelText(
+            'Filtros de transações',
+        )
+
+        const categoryFilter = within(filters).getByLabelText(
+            'Categoria',
+        )
+
+        /*
+         * A seleção muda enquanto o DELETE ainda está pendente.
+         * A reconciliação precisa usar esta seleção atual,
+         * e não a seleção existente quando a requisição começou.
+         */
+        fireEvent.change(categoryFilter, {
+            target: {
+                value: 'Casa',
+            },
+        })
+
+        expect(categoryFilter.value).toBe('Casa')
+
+        await resolveDeferredPromise(pendingDelete, {
+            ok: true,
+            status: 204,
+        })
+
+        expect(
+            screen.getByRole('heading', {
+                name: 'Nova transação',
+            }),
+        ).toBeTruthy()
+
+        expect(
+            screen.queryByText('Mercado'),
+        ).toBeNull()
+
+        /*
+         * "Casa" deixou de existir após a exclusão.
+         * Como esse era o filtro ATUAL, ele precisa voltar para "all".
+         */
+        expect(categoryFilter.value).toBe('all')
+
+        expect(screen.getByText('Freela')).toBeTruthy()
     })
 })
 
