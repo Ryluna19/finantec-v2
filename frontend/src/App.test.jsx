@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+    act,
     cleanup,
     fireEvent,
     render,
@@ -33,6 +34,17 @@ function createDeferredPromise() {
         resolve,
         reject,
     }
+}
+
+async function resolveDeferredPromise(deferred, value) {
+    await act(async () => {
+        deferred.resolve(value)
+
+        // Espera o consumidor da promise retomar e permite que os
+        // awaits imediatamente seguintes também sejam processados.
+        await deferred.promise
+        await Promise.resolve()
+    })
 }
 
 function createAuthenticatedSessionResponse() {
@@ -406,14 +418,12 @@ describe('App transactions', () => {
             ).toBe(false)
         })
 
-        initialGet.resolve({
+        await resolveDeferredPromise(initialGet, {
             ok: true,
             json: async () => [],
         })
 
-        await waitFor(() => {
-            expect(screen.getByText('Salário')).toBeTruthy()
-        })
+        expect(screen.getByText('Salário')).toBeTruthy()
     })
 
     it('shows a loading error instead of an empty state when the initial GET fails', async () => {
@@ -575,5 +585,525 @@ describe('App transactions', () => {
             ),
         ).toHaveLength(1)
     })
+
+    it('ignores an old transactions GET after the authenticated user changes', async () => {
+        const oldTransactionsGet = createDeferredPromise()
+
+        const userB = {
+            id: '77777777-7777-4777-8777-777777777777',
+            username: 'Maria',
+        }
+
+        const today = new Date()
+        const transactionDate = [
+            today.getFullYear(),
+            String(today.getMonth() + 1).padStart(2, '0'),
+            '15',
+        ].join('-')
+
+        const transactionFromA = {
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            date: transactionDate,
+            description: 'Transação da conta A',
+            category: 'Teste',
+            type: 'income',
+            amountInCents: 10000,
+        }
+
+        const transactionFromB = {
+            id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            date: transactionDate,
+            description: 'Transação da conta B',
+            category: 'Teste',
+            type: 'income',
+            amountInCents: 20000,
+        }
+
+        let transactionsGetCount = 0
+
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        user: AUTHENTICATED_USER,
+                    }),
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                !options.method
+            ) {
+                transactionsGetCount += 1
+
+                if (transactionsGetCount === 1) {
+                    return oldTransactionsGet.promise
+                }
+
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => [transactionFromB],
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({
+                    ok: false,
+                    status: 401,
+                    json: async () => ({
+                        error: 'Sessão inválida ou expirada.',
+                    }),
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/auth/login' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        user: userB,
+                    }),
+                })
+            }
+
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
+
+        vi.stubGlobal('fetch', fetchMock)
+
+        render(<App />)
+
+        const dateInput = await screen.findByLabelText('Data')
+
+        fireEvent.change(dateInput, {
+            target: { value: transactionDate },
+        })
+
+        fireEvent.change(screen.getByLabelText('Descrição'), {
+            target: { value: 'Forçar expiração' },
+        })
+
+        fireEvent.change(screen.getByLabelText('Categoria'), {
+            target: { value: 'Teste' },
+        })
+
+        fireEvent.change(screen.getByLabelText('Tipo'), {
+            target: { value: 'income' },
+        })
+
+        fireEvent.change(screen.getByLabelText('Valor (R$)'), {
+            target: { value: '10,00' },
+        })
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Adicionar transação',
+            }),
+        )
+
+        await screen.findByRole('heading', {
+            name: 'Entrar',
+        })
+
+        fireEvent.change(
+            screen.getByLabelText('Nome de usuário'),
+            {
+                target: { value: 'Maria' },
+            },
+        )
+
+        fireEvent.change(screen.getByLabelText('Senha'), {
+            target: { value: 'senha123' },
+        })
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Entrar',
+            }),
+        )
+
+        await screen.findByText('Transação da conta B')
+
+        await resolveDeferredPromise(oldTransactionsGet, {
+            ok: true,
+            status: 200,
+            json: async () => [transactionFromA],
+        })
+
+        expect(
+            screen.getByText('Transação da conta B'),
+        ).toBeTruthy()
+
+        expect(
+            screen.queryByText('Transação da conta A'),
+        ).toBeNull()
+
+        expect(transactionsGetCount).toBe(2)
+    })
+
+    it('ignores an old transaction POST after the authenticated user changes', async () => {
+        const oldTransactionsGet = createDeferredPromise()
+        const oldPost = createDeferredPromise()
+
+        const userB = {
+            id: '88888888-8888-4888-8888-888888888888',
+            username: 'Maria',
+        }
+
+        const today = new Date()
+        const transactionDate = [
+            today.getFullYear(),
+            String(today.getMonth() + 1).padStart(2, '0'),
+            '15',
+        ].join('-')
+
+        const transactionFromA = {
+            id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+            date: transactionDate,
+            description: 'POST antigo da conta A',
+            category: 'Teste',
+            type: 'income',
+            amountInCents: 30000,
+        }
+
+        const transactionFromB = {
+            id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+            date: transactionDate,
+            description: 'Dados da conta B',
+            category: 'Teste',
+            type: 'income',
+            amountInCents: 40000,
+        }
+
+        let transactionsGetCount = 0
+
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        user: AUTHENTICATED_USER,
+                    }),
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                !options.method
+            ) {
+                transactionsGetCount += 1
+
+                if (transactionsGetCount === 1) {
+                    return oldTransactionsGet.promise
+                }
+
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => [transactionFromB],
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                options.method === 'POST'
+            ) {
+                return oldPost.promise
+            }
+
+            if (
+                url === 'http://localhost:3000/auth/login' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        user: userB,
+                    }),
+                })
+            }
+
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
+
+        vi.stubGlobal('fetch', fetchMock)
+
+        render(<App />)
+
+        const dateInput = await screen.findByLabelText('Data')
+
+        fireEvent.change(dateInput, {
+            target: { value: transactionDate },
+        })
+
+        fireEvent.change(screen.getByLabelText('Descrição'), {
+            target: { value: 'POST antigo da conta A' },
+        })
+
+        fireEvent.change(screen.getByLabelText('Categoria'), {
+            target: { value: 'Teste' },
+        })
+
+        fireEvent.change(screen.getByLabelText('Tipo'), {
+            target: { value: 'income' },
+        })
+
+        fireEvent.change(screen.getByLabelText('Valor (R$)'), {
+            target: { value: '300,00' },
+        })
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Adicionar transação',
+            }),
+        )
+
+        await screen.findByRole('button', {
+            name: 'Adicionando...',
+        })
+
+        oldTransactionsGet.resolve({
+            ok: false,
+            status: 401,
+            json: async () => ({
+                error: 'Sessão inválida ou expirada.',
+            }),
+        })
+
+        await screen.findByRole('heading', {
+            name: 'Entrar',
+        })
+
+        fireEvent.change(
+            screen.getByLabelText('Nome de usuário'),
+            {
+                target: { value: 'Maria' },
+            },
+        )
+
+        fireEvent.change(screen.getByLabelText('Senha'), {
+            target: { value: 'senha123' },
+        })
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Entrar',
+            }),
+        )
+
+        await screen.findByText('Dados da conta B')
+
+        await resolveDeferredPromise(oldPost, {
+            ok: true,
+            status: 201,
+            json: async () => transactionFromA,
+        })
+
+        expect(
+            screen.getByText('Dados da conta B'),
+        ).toBeTruthy()
+
+        expect(
+            screen.queryByText('POST antigo da conta A'),
+        ).toBeNull()
+
+        expect(transactionsGetCount).toBe(2)
+    })
+
+    it('ignores a late 401 from the previous authenticated user', async () => {
+    const oldTransactionsGet = createDeferredPromise()
+    const oldPost = createDeferredPromise()
+
+    const userB = {
+        id: '99999999-9999-4999-8999-999999999999',
+        username: 'Maria',
+    }
+
+    const today = new Date()
+    const transactionDate = [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, '0'),
+        '15',
+    ].join('-')
+
+    const transactionFromB = {
+        id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+        date: transactionDate,
+        description: 'Conta B continua autenticada',
+        category: 'Teste',
+        type: 'income',
+        amountInCents: 50000,
+    }
+
+    let transactionsGetCount = 0
+
+    const fetchMock = vi.fn((url, options = {}) => {
+        if (
+            url === 'http://localhost:3000/auth/me' &&
+            !options.method
+        ) {
+            return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    user: AUTHENTICATED_USER,
+                }),
+            })
+        }
+
+        if (
+            url === 'http://localhost:3000/transactions' &&
+            !options.method
+        ) {
+            transactionsGetCount += 1
+
+            if (transactionsGetCount === 1) {
+                return oldTransactionsGet.promise
+            }
+
+            return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => [transactionFromB],
+            })
+        }
+
+        if (
+            url === 'http://localhost:3000/transactions' &&
+            options.method === 'POST'
+        ) {
+            return oldPost.promise
+        }
+
+        if (
+            url === 'http://localhost:3000/auth/login' &&
+            options.method === 'POST'
+        ) {
+            return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    user: userB,
+                }),
+            })
+        }
+
+        throw new Error(
+            `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+        )
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    const dateInput = await screen.findByLabelText('Data')
+
+    fireEvent.change(dateInput, {
+        target: { value: transactionDate },
+    })
+
+    fireEvent.change(screen.getByLabelText('Descrição'), {
+        target: { value: 'Operação da conta A' },
+    })
+
+    fireEvent.change(screen.getByLabelText('Categoria'), {
+        target: { value: 'Teste' },
+    })
+
+    fireEvent.change(screen.getByLabelText('Tipo'), {
+        target: { value: 'income' },
+    })
+
+    fireEvent.change(screen.getByLabelText('Valor (R$)'), {
+        target: { value: '100,00' },
+    })
+
+    fireEvent.click(
+        screen.getByRole('button', {
+            name: 'Adicionar transação',
+        }),
+    )
+
+    await screen.findByRole('button', {
+        name: 'Adicionando...',
+    })
+
+    // Outra requisição da conta A detecta a sessão expirada.
+    await resolveDeferredPromise(oldTransactionsGet, {
+        ok: false,
+        status: 401,
+        json: async () => ({
+            error: 'Sessão inválida ou expirada.',
+        }),
+    })
+
+    await screen.findByRole('heading', {
+        name: 'Entrar',
+    })
+
+    fireEvent.change(
+        screen.getByLabelText('Nome de usuário'),
+        {
+            target: { value: 'Maria' },
+        },
+    )
+
+    fireEvent.change(screen.getByLabelText('Senha'), {
+        target: { value: 'senha123' },
+    })
+
+    fireEvent.click(
+        screen.getByRole('button', {
+            name: 'Entrar',
+        }),
+    )
+
+    await screen.findByText(
+        'Conta B continua autenticada',
+    )
+
+    // O POST de A termina depois que B já possui uma sessão válida.
+    await resolveDeferredPromise(oldPost, {
+        ok: false,
+        status: 401,
+        json: async () => ({
+            error: 'Sessão inválida ou expirada.',
+        }),
+    })
+
+    expect(
+        screen.getByText('Conta B continua autenticada'),
+    ).toBeTruthy()
+
+    expect(
+        screen.queryByRole('heading', {
+            name: 'Entrar',
+        }),
+    ).toBeNull()
+
+    expect(transactionsGetCount).toBe(2)
+})
 })
 
