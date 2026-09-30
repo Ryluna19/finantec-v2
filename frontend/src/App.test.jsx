@@ -97,103 +97,214 @@ describe('App transactions', () => {
     })
 
     it('logs in and loads transactions for the authenticated user', async () => {
-    const fetchMock = vi.fn((url, options = {}) => {
-        if (
-            url === 'http://localhost:3000/auth/me' &&
-            !options.method
-        ) {
-            return Promise.resolve({
-                ok: false,
-                status: 401,
-                json: async () => ({
-                    error: 'Sessão inválida ou expirada.',
-                }),
-            })
-        }
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: false,
+                    status: 401,
+                    json: async () => ({
+                        error: 'Sessão inválida ou expirada.',
+                    }),
+                })
+            }
 
-        if (
-            url === 'http://localhost:3000/auth/login' &&
-            options.method === 'POST'
-        ) {
-            return Promise.resolve({
-                ok: true,
-                status: 200,
-                json: async () => ({
-                    user: AUTHENTICATED_USER,
-                }),
-            })
-        }
+            if (
+                url === 'http://localhost:3000/auth/login' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        user: AUTHENTICATED_USER,
+                    }),
+                })
+            }
 
-        if (
-            url === 'http://localhost:3000/transactions' &&
-            !options.method
-        ) {
-            return Promise.resolve({
-                ok: true,
-                json: async () => [],
-            })
-        }
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => [],
+                })
+            }
 
-        throw new Error(
-            `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
-        )
-    })
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
 
-    vi.stubGlobal('fetch', fetchMock)
+        vi.stubGlobal('fetch', fetchMock)
 
-    render(<App />)
+        render(<App />)
 
-    await screen.findByRole('heading', {
-        name: 'Entrar',
-    })
-
-    fireEvent.change(
-        screen.getByLabelText('Nome de usuário'),
-        {
-            target: { value: 'Ryan' },
-        },
-    )
-
-    fireEvent.change(screen.getByLabelText('Senha'), {
-        target: { value: 'senha123' },
-    })
-
-    fireEvent.click(
-        screen.getByRole('button', {
+        await screen.findByRole('heading', {
             name: 'Entrar',
-        }),
-    )
+        })
 
-    await screen.findByText(
-        'Nenhuma transação encontrada para o período selecionado.',
-    )
+        fireEvent.change(
+            screen.getByLabelText('Nome de usuário'),
+            {
+                target: { value: 'Ryan' },
+            },
+        )
 
-    const loginCall = fetchMock.mock.calls.find(
-        ([url]) =>
-            url === 'http://localhost:3000/auth/login',
-    )
+        fireEvent.change(screen.getByLabelText('Senha'), {
+            target: { value: 'senha123' },
+        })
 
-    expect(loginCall).toBeTruthy()
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Entrar',
+            }),
+        )
 
-    expect(loginCall[1]).toEqual({
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            username: 'Ryan',
-            password: 'senha123',
-        }),
+        await screen.findByText(
+            'Nenhuma transação encontrada para o período selecionado.',
+        )
+
+        const loginCall = fetchMock.mock.calls.find(
+            ([url]) =>
+                url === 'http://localhost:3000/auth/login',
+        )
+
+        expect(loginCall).toBeTruthy()
+
+        expect(loginCall[1]).toEqual({
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                username: 'Ryan',
+                password: 'senha123',
+            }),
+        })
+
+        expect(
+            fetchMock.mock.calls.some(
+                ([url]) =>
+                    url === 'http://localhost:3000/transactions',
+            ),
+        ).toBe(true)
     })
 
-    expect(
-        fetchMock.mock.calls.some(
+    it('registers a new user and loads their transactions', async () => {
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: false,
+                    status: 401,
+                    json: async () => ({
+                        error: 'Sessão inválida ou expirada.',
+                    }),
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/auth/register' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 201,
+                    json: async () => ({
+                        user: AUTHENTICATED_USER,
+                    }),
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    json: async () => [],
+                })
+            }
+
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
+
+        vi.stubGlobal('fetch', fetchMock)
+
+        render(<App />)
+
+        await screen.findByRole('heading', {
+            name: 'Entrar',
+        })
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Criar uma conta',
+            }),
+        )
+
+        expect(
+            screen.getByRole('heading', {
+                name: 'Criar conta',
+            }),
+        ).toBeTruthy()
+
+        fireEvent.change(
+            screen.getByLabelText('Nome de usuário'),
+            {
+                target: { value: 'Ryan' },
+            },
+        )
+
+        fireEvent.change(screen.getByLabelText('Senha'), {
+            target: { value: 'senha123' },
+        })
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Criar conta',
+            }),
+        )
+
+        await screen.findByText(
+            'Nenhuma transação encontrada para o período selecionado.',
+        )
+
+        const registerCall = fetchMock.mock.calls.find(
             ([url]) =>
-                url === 'http://localhost:3000/transactions',
-        ),
-    ).toBe(true)
-})
+                url === 'http://localhost:3000/auth/register',
+        )
+
+        expect(registerCall).toBeTruthy()
+
+        expect(registerCall[1]).toEqual({
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                username: 'Ryan',
+                password: 'senha123',
+            }),
+        })
+
+        expect(
+            fetchMock.mock.calls.some(
+                ([url]) =>
+                    url === 'http://localhost:3000/transactions',
+            ),
+        ).toBe(true)
+    })
 
     it('keeps a newly created transaction when the initial GET resolves later', async () => {
         const initialGet = createDeferredPromise()
@@ -465,3 +576,4 @@ describe('App transactions', () => {
         ).toHaveLength(1)
     })
 })
+

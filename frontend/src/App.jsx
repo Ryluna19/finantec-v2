@@ -491,6 +491,38 @@ function App() {
     setAuthStatus('authenticated')
   }
 
+  async function handleRegister(credentials) {
+  const response = await fetch(
+    'http://localhost:3000/auth/register',
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credentials),
+    },
+  )
+
+  let data = null
+
+  try {
+    data = await response.json()
+  } catch {
+    // Mantém a mensagem padrão se a resposta não possuir JSON válido.
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error || 'Não foi possível criar a conta.',
+    )
+  }
+
+  setUser(data.user)
+  setAuthError(null)
+  setAuthStatus('authenticated')
+}
+
   const emptyTransactionMessage =
     periodTransactions.length === 0
       ? 'Nenhuma transação encontrada para o período selecionado.'
@@ -515,7 +547,11 @@ function App() {
   if (authStatus === 'unauthenticated') {
     return (
       <div className="empty-state">
-        <AuthForm onLogin={handleLogin} />
+        <AuthForm
+          onLogin={handleLogin}
+          onRegister={handleRegister}
+         />
+
       </div>
     )
   }

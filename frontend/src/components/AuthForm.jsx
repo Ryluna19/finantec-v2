@@ -1,9 +1,12 @@
 import { useRef, useState } from 'react'
 
-function AuthForm({ onLogin }) {
+function AuthForm({ onLogin, onRegister }) {
+  const [mode, setMode] = useState('login')
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const isSubmittingRef = useRef(false)
+
+  const isRegisterMode = mode === 'register'
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -22,7 +25,11 @@ function AuthForm({ onLogin }) {
     setIsSubmitting(true)
 
     try {
-      await onLogin({
+      const authenticate = isRegisterMode
+        ? onRegister
+        : onLogin
+
+      await authenticate({
         username,
         password,
       })
@@ -37,21 +44,30 @@ function AuthForm({ onLogin }) {
     }
   }
 
+  function handleModeChange() {
+    setError('')
+    setMode((current) =>
+      current === 'login' ? 'register' : 'login',
+    )
+  }
+
   return (
-    <section className="panel" aria-labelledby="login-title">
-      <h1 id="login-title">Entrar</h1>
+    <section className="panel" aria-labelledby="auth-title">
+      <h1 id="auth-title">
+        {isRegisterMode ? 'Criar conta' : 'Entrar'}
+      </h1>
 
       <form
         className="transaction-form"
         onSubmit={handleSubmit}
       >
         <div className="form-field">
-          <label htmlFor="login-username">
+          <label htmlFor="auth-username">
             Nome de usuário
           </label>
 
           <input
-            id="login-username"
+            id="auth-username"
             name="username"
             autoComplete="username"
             required
@@ -60,15 +76,19 @@ function AuthForm({ onLogin }) {
         </div>
 
         <div className="form-field">
-          <label htmlFor="login-password">
+          <label htmlFor="auth-password">
             Senha
           </label>
 
           <input
-            id="login-password"
+            id="auth-password"
             name="password"
             type="password"
-            autoComplete="current-password"
+            autoComplete={
+              isRegisterMode
+                ? 'new-password'
+                : 'current-password'
+            }
             required
             disabled={isSubmitting}
           />
@@ -85,7 +105,23 @@ function AuthForm({ onLogin }) {
           type="submit"
           disabled={isSubmitting}
         >
-          {isSubmitting ? 'Entrando...' : 'Entrar'}
+          {isSubmitting
+            ? isRegisterMode
+              ? 'Criando conta...'
+              : 'Entrando...'
+            : isRegisterMode
+              ? 'Criar conta'
+              : 'Entrar'}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleModeChange}
+          disabled={isSubmitting}
+        >
+          {isRegisterMode
+            ? 'Voltar para entrar'
+            : 'Criar uma conta'}
         </button>
       </form>
     </section>
