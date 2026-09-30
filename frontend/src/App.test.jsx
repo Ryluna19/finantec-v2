@@ -8,6 +8,10 @@ import {
 } from '@testing-library/react'
 import App from './App'
 
+const AUTHENTICATED_USER = {
+    id: '6b959525-67fc-453c-b4b2-956058724f22',
+    username: 'Ryan',
+}
 
 afterEach(() => {
     cleanup()
@@ -31,10 +35,168 @@ function createDeferredPromise() {
     }
 }
 
+function createAuthenticatedSessionResponse() {
+    return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+            user: AUTHENTICATED_USER,
+        }),
+    })
+}
+
 describe('App transactions', () => {
+
+    it('does not load transactions when there is no authenticated session', async () => {
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: false,
+                    status: 401,
+                    json: async () => ({
+                        error: 'Sessão inválida ou expirada.',
+                    }),
+                })
+            }
+
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
+
+        vi.stubGlobal('fetch', fetchMock)
+
+        render(<App />)
+
+        expect(screen.getByRole('status').textContent).toContain(
+            'Verificando sessão...',
+        )
+
+        await screen.findByRole('heading', {
+            name: 'Entrar',
+        })
+
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            'http://localhost:3000/auth/me',
+            {
+                credentials: 'include',
+            },
+        )
+
+        expect(
+            fetchMock.mock.calls.some(
+                ([url]) =>
+                    url === 'http://localhost:3000/transactions',
+            ),
+        ).toBe(false)
+    })
+
+    it('logs in and loads transactions for the authenticated user', async () => {
+    const fetchMock = vi.fn((url, options = {}) => {
+        if (
+            url === 'http://localhost:3000/auth/me' &&
+            !options.method
+        ) {
+            return Promise.resolve({
+                ok: false,
+                status: 401,
+                json: async () => ({
+                    error: 'Sessão inválida ou expirada.',
+                }),
+            })
+        }
+
+        if (
+            url === 'http://localhost:3000/auth/login' &&
+            options.method === 'POST'
+        ) {
+            return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    user: AUTHENTICATED_USER,
+                }),
+            })
+        }
+
+        if (
+            url === 'http://localhost:3000/transactions' &&
+            !options.method
+        ) {
+            return Promise.resolve({
+                ok: true,
+                json: async () => [],
+            })
+        }
+
+        throw new Error(
+            `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+        )
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await screen.findByRole('heading', {
+        name: 'Entrar',
+    })
+
+    fireEvent.change(
+        screen.getByLabelText('Nome de usuário'),
+        {
+            target: { value: 'Ryan' },
+        },
+    )
+
+    fireEvent.change(screen.getByLabelText('Senha'), {
+        target: { value: 'senha123' },
+    })
+
+    fireEvent.click(
+        screen.getByRole('button', {
+            name: 'Entrar',
+        }),
+    )
+
+    await screen.findByText(
+        'Nenhuma transação encontrada para o período selecionado.',
+    )
+
+    const loginCall = fetchMock.mock.calls.find(
+        ([url]) =>
+            url === 'http://localhost:3000/auth/login',
+    )
+
+    expect(loginCall).toBeTruthy()
+
+    expect(loginCall[1]).toEqual({
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            username: 'Ryan',
+            password: 'senha123',
+        }),
+    })
+
+    expect(
+        fetchMock.mock.calls.some(
+            ([url]) =>
+                url === 'http://localhost:3000/transactions',
+        ),
+    ).toBe(true)
+})
+
     it('keeps a newly created transaction when the initial GET resolves later', async () => {
         const initialGet = createDeferredPromise()
-
         const pendingPost = createDeferredPromise()
 
         const today = new Date()
@@ -55,6 +217,13 @@ describe('App transactions', () => {
 
         const fetchMock = vi.fn((url, options = {}) => {
             if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return createAuthenticatedSessionResponse()
+            }
+
+            if (
                 url === 'http://localhost:3000/transactions' &&
                 !options.method
             ) {
@@ -68,14 +237,18 @@ describe('App transactions', () => {
                 return pendingPost.promise
             }
 
-            throw new Error(`Unexpected fetch: ${options.method ?? 'GET'} ${url}`)
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
         })
 
         vi.stubGlobal('fetch', fetchMock)
 
         render(<App />)
 
-        fireEvent.change(screen.getByLabelText('Data'), {
+        const dateInput = await screen.findByLabelText('Data')
+
+        fireEvent.change(dateInput, {
             target: { value: transactionDate },
         })
 
@@ -135,7 +308,25 @@ describe('App transactions', () => {
     it('shows a loading error instead of an empty state when the initial GET fails', async () => {
         const initialGet = createDeferredPromise()
 
-        const fetchMock = vi.fn(() => initialGet.promise)
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return createAuthenticatedSessionResponse()
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                !options.method
+            ) {
+                return initialGet.promise
+            }
+
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
 
         vi.stubGlobal('fetch', fetchMock)
 
@@ -143,9 +334,7 @@ describe('App transactions', () => {
 
         render(<App />)
 
-        expect(screen.getByRole('status').textContent).toContain(
-            'Carregando transações...',
-        )
+        await screen.findByText('Carregando transações...')
 
         initialGet.reject(new Error('Backend unavailable'))
 
@@ -183,6 +372,13 @@ describe('App transactions', () => {
 
         const fetchMock = vi.fn((url, options = {}) => {
             if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return createAuthenticatedSessionResponse()
+            }
+
+            if (
                 url === 'http://localhost:3000/transactions' &&
                 !options.method
             ) {
@@ -199,7 +395,9 @@ describe('App transactions', () => {
                 return pendingPost.promise
             }
 
-            throw new Error(`Unexpected fetch: ${options.method ?? 'GET'} ${url}`)
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
         })
 
         vi.stubGlobal('fetch', fetchMock)

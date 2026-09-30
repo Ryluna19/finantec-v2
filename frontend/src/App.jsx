@@ -3,6 +3,7 @@ import TransactionList from './components/TransactionList'
 import TransactionForm from './components/TransactionForm'
 import TransactionFilters from './components/TransactionFilters'
 import TransactionSummary from './components/TransactionSummary'
+import AuthForm from './components/AuthForm'
 import './App.css'
 
 function App() {
@@ -13,6 +14,9 @@ function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [transactions, setTransactions] = useState([])
   const [editingTransaction, setEditingTransaction] = useState(null)
+  const [user, setUser] = useState(null)
+  const [authStatus, setAuthStatus] = useState('checking')
+  const [authError, setAuthError] = useState(null)
 
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
@@ -35,11 +39,72 @@ function App() {
   useEffect(() => {
     let isActive = true
 
+    async function loadSession() {
+      try {
+        const response = await fetch('http://localhost:3000/auth/me', {
+          credentials: 'include',
+        })
+
+        if (!isActive) {
+          return
+        }
+
+        if (response.status === 401) {
+          setUser(null)
+          setAuthError(null)
+          setAuthStatus('unauthenticated')
+          return
+        }
+
+        if (!response.ok) {
+          throw new Error('Não foi possível verificar a sessão.')
+        }
+
+        const data = await response.json()
+
+        if (!isActive) {
+          return
+        }
+
+        setUser(data.user)
+        setAuthError(null)
+        setAuthStatus('authenticated')
+      } catch (error) {
+        if (!isActive) {
+          return
+        }
+
+        console.error(error)
+        setUser(null)
+        setAuthError('Não foi possível verificar sua sessão.')
+        setAuthStatus('error')
+      }
+    }
+
+    loadSession()
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (authStatus !== 'authenticated' || !user) {
+      return undefined
+    }
+
+    let isActive = true
+
     async function loadTransactions() {
       const mutationVersionAtStart = mutationVersionRef.current
 
+      setIsLoadingTransactions(true)
+      setTransactionsLoadError(null)
+
       try {
-        const response = await fetch('http://localhost:3000/transactions')
+        const response = await fetch('http://localhost:3000/transactions', {
+          credentials: 'include',
+        })
 
         if (!response.ok) {
           throw new Error('Não foi possível carregar as transações.')
@@ -47,7 +112,7 @@ function App() {
 
         const data = await response.json()
 
-        // Ignora uma execução antiga ou dados anteriores a uma mutação.
+        // Descarta dados antigos se uma mutação terminou durante o GET.
         if (
           !isActive ||
           mutationVersionRef.current !== mutationVersionAtStart
@@ -76,7 +141,7 @@ function App() {
     return () => {
       isActive = false
     }
-  }, [])
+  }, [authStatus, user])
 
   const availableYears = [
     ...new Set([
@@ -394,10 +459,66 @@ function App() {
     )
   }
 
+  async function handleLogin(credentials) {
+    const response = await fetch(
+      'http://localhost:3000/auth/login',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      },
+    )
+
+    let data = null
+
+    try {
+      data = await response.json()
+    } catch {
+      // Mantém a mensagem padrão se a resposta não possuir JSON válido.
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data?.error || 'Não foi possível entrar na conta.',
+      )
+    }
+
+    setUser(data.user)
+    setAuthError(null)
+    setAuthStatus('authenticated')
+  }
+
   const emptyTransactionMessage =
     periodTransactions.length === 0
       ? 'Nenhuma transação encontrada para o período selecionado.'
       : 'Nenhuma transação corresponde aos filtros selecionados.'
+
+  if (authStatus === 'checking') {
+    return (
+      <div className="empty-state" role="status">
+        <p>Verificando sessão...</p>
+      </div>
+    )
+  }
+
+  if (authStatus === 'error') {
+    return (
+      <div className="empty-state" role="alert">
+        <p>{authError}</p>
+      </div>
+    )
+  }
+
+  if (authStatus === 'unauthenticated') {
+    return (
+      <div className="empty-state">
+        <AuthForm onLogin={handleLogin} />
+      </div>
+    )
+  }
 
   return (
     <div
