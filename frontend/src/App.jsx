@@ -5,6 +5,7 @@ import TransactionFilters from './components/TransactionFilters'
 import TransactionSummary from './components/TransactionSummary'
 import AuthForm from './components/AuthForm'
 import { filterTransactionsByPeriod } from './transactionSelectors'
+import useTransactionFilters from './hooks/useTransactionFilters'
 import './App.css'
 
 function App() {
@@ -20,11 +21,23 @@ function App() {
   const [authStatus, setAuthStatus] = useState('checking')
   const [authError, setAuthError] = useState(null)
 
-  const [selectedYear, setSelectedYear] = useState(currentYear)
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
-  const [selectedType, setSelectedType] = useState('all')
-  const [selectedCategory, setSelectedCategory] = useState('all')
-  const [descriptionQuery, setDescriptionQuery] = useState('')
+  const {
+    selectedYear,
+    selectedMonth,
+    selectedType,
+    selectedCategory,
+    descriptionQuery,
+    updateSelectedType,
+    updateSelectedCategory,
+    updateDescriptionQuery,
+    handleYearChange,
+    handleMonthChange,
+    resetFilters,
+    reconcileFilters,
+  } = useTransactionFilters({
+    currentYear,
+    currentMonth,
+  })
 
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(true)
   const [transactionsLoadError, setTransactionsLoadError] = useState(null)
@@ -33,13 +46,6 @@ function App() {
   const mutationVersionRef = useRef(0)
   const authGenerationRef = useRef(0)
 
-  const filtersRef = useRef({
-    year: currentYear,
-    month: currentMonth,
-    type: 'all',
-    category: 'all',
-    description: '',
-  })
 
   const resetPrivateState = useCallback(() => {
     const resetDate = new Date()
@@ -49,26 +55,20 @@ function App() {
     transactionsRef.current = []
     mutationVersionRef.current += 1
 
-    filtersRef.current = {
-      year: resetYear,
-      month: resetMonth,
-      type: 'all',
-      category: 'all',
-      description: '',
-    }
+    resetFilters(resetYear, resetMonth)
 
     setTransactions([])
     setEditingTransaction(null)
 
-    setSelectedYear(resetYear)
-    setSelectedMonth(resetMonth)
-    setSelectedType('all')
-    setSelectedCategory('all')
-    setDescriptionQuery('')
-
     setTransactionsLoadError(null)
     setIsLoadingTransactions(false)
-  }, [])
+  }, [
+    resetFilters,
+    setTransactions,
+    setEditingTransaction,
+    setTransactionsLoadError,
+    setIsLoadingTransactions,
+  ])
 
   const activateAuthenticatedUser = useCallback(
     (nextUser) => {
@@ -82,7 +82,13 @@ function App() {
       setAuthError(null)
       setAuthStatus('authenticated')
     },
-    [resetPrivateState],
+    [
+      resetPrivateState,
+      setIsLoadingTransactions,
+      setUser,
+      setAuthError,
+      setAuthStatus,
+    ],
   )
 
   const expireAuthenticatedSession = useCallback(
@@ -102,7 +108,12 @@ function App() {
 
       return true
     },
-    [resetPrivateState],
+    [
+      resetPrivateState,
+      setUser,
+      setAuthError,
+      setAuthStatus,
+    ],
   )
 
   useEffect(() => {
@@ -358,110 +369,6 @@ function App() {
     setTransactions(nextTransactions)
 
     return nextTransactions
-  }
-
-  function updateSelectedYear(year) {
-    filtersRef.current.year = year
-    setSelectedYear(year)
-  }
-
-  function updateSelectedMonth(month) {
-    filtersRef.current.month = month
-    setSelectedMonth(month)
-  }
-
-  function updateSelectedType(type) {
-    filtersRef.current.type = type
-    setSelectedType(type)
-  }
-
-  function updateSelectedCategory(category) {
-    filtersRef.current.category = category
-    setSelectedCategory(category)
-  }
-
-  function updateDescriptionQuery(description) {
-    filtersRef.current.description = description
-    setDescriptionQuery(description)
-  }
-
-  function reconcileFilters(nextTransactions) {
-    const filters = filtersRef.current
-
-    const nextAvailableYears = [
-      ...new Set([
-        currentYear,
-        ...nextTransactions.map((transaction) =>
-          Number(transaction.date.slice(0, 4)),
-        ),
-      ]),
-    ]
-
-    if (!nextAvailableYears.includes(filters.year)) {
-      // Volta ao período padrão se o ano selecionado deixar de existir.
-      updateSelectedYear(currentYear)
-      updateSelectedMonth(currentMonth)
-      updateSelectedType('all')
-      updateSelectedCategory('all')
-      updateDescriptionQuery('')
-      return
-    }
-
-    const nextPeriodTransactions = filterTransactionsByPeriod(
-      nextTransactions,
-      filters.year,
-      filters.month,
-    )
-
-    const nextAvailableTypes = [
-      ...new Set(
-        nextPeriodTransactions.map(
-          (transaction) => transaction.type,
-        ),
-      ),
-    ]
-
-    const nextAvailableCategories = [
-      ...new Set(
-        nextPeriodTransactions.map(
-          (transaction) => transaction.category,
-        ),
-      ),
-    ]
-
-    if (
-      filters.type !== 'all' &&
-      !nextAvailableTypes.includes(filters.type)
-    ) {
-      updateSelectedType('all')
-    }
-
-    if (
-      filters.category !== 'all' &&
-      !nextAvailableCategories.includes(filters.category)
-    ) {
-      updateSelectedCategory('all')
-    }
-  }
-
-  function handleYearChange(year) {
-    updateSelectedYear(year)
-    updateSelectedType('all')
-    updateSelectedCategory('all')
-    updateDescriptionQuery('')
-
-    if (year === currentYear) {
-      updateSelectedMonth(currentMonth)
-    } else {
-      updateSelectedMonth('all')
-    }
-  }
-
-  function handleMonthChange(month) {
-    updateSelectedMonth(month)
-    updateSelectedType('all')
-    updateSelectedCategory('all')
-    updateDescriptionQuery('')
   }
 
   async function handleAddTransaction(transactionData) {
