@@ -1616,5 +1616,241 @@ describe('App transactions', () => {
 
         expect(screen.getByText('Freela')).toBeTruthy()
     })
+
+    it('clears private filters and editing when another user signs in', async () => {
+        const userB = {
+            id: '51515151-5151-4515-8515-515151515151',
+            username: 'Maria',
+        }
+
+        const today = new Date()
+        const currentYear = today.getFullYear()
+        const currentMonth = today.getMonth() + 1
+        const previousYear = currentYear - 1
+
+        const currentMonthText = String(currentMonth).padStart(
+            2,
+            '0',
+        )
+
+        const transactionFromA = {
+            id: '61616161-6161-4616-8616-616161616161',
+            date: `${previousYear}-06-15`,
+            description: 'Despesa antiga da conta A',
+            category: 'Casa',
+            type: 'expense',
+            amountInCents: 15000,
+        }
+
+        const transactionFromB = {
+            id: '71717171-7171-4717-8717-717171717171',
+            date: `${currentYear}-${currentMonthText}-15`,
+            description: 'Receita da conta B',
+            category: 'Trabalho',
+            type: 'income',
+            amountInCents: 50000,
+        }
+
+        let transactionsGetCount = 0
+
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        user: AUTHENTICATED_USER,
+                    }),
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                !options.method
+            ) {
+                transactionsGetCount += 1
+
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () =>
+                        transactionsGetCount === 1
+                            ? [transactionFromA]
+                            : [transactionFromB],
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/auth/logout' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 204,
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/auth/login' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        user: userB,
+                    }),
+                })
+            }
+
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
+
+        vi.stubGlobal('fetch', fetchMock)
+
+        render(<App />)
+
+        const yearFilter = await screen.findByLabelText('Ano')
+
+        fireEvent.change(yearFilter, {
+            target: {
+                value: String(previousYear),
+            },
+        })
+
+        await screen.findByText('Despesa antiga da conta A')
+
+        const filtersFromA = screen.getByLabelText(
+            'Filtros de transações',
+        )
+
+        expect(
+            within(filtersFromA).getByLabelText('Mês').value,
+        ).toBe('all')
+
+        fireEvent.change(
+            within(filtersFromA).getByLabelText('Tipo'),
+            {
+                target: {
+                    value: 'expense',
+                },
+            },
+        )
+
+        fireEvent.change(
+            within(filtersFromA).getByLabelText('Categoria'),
+            {
+                target: {
+                    value: 'Casa',
+                },
+            },
+        )
+
+        fireEvent.change(
+            within(filtersFromA).getByLabelText(
+                'Buscar por descrição',
+            ),
+            {
+                target: {
+                    value: 'antiga',
+                },
+            },
+        )
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Editar Despesa antiga da conta A',
+            }),
+        )
+
+        expect(
+            screen.getByRole('heading', {
+                name: 'Editar transação',
+            }),
+        ).toBeTruthy()
+
+        expect(screen.getByLabelText('Descrição').value).toBe(
+            'Despesa antiga da conta A',
+        )
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Sair',
+            }),
+        )
+
+        await screen.findByRole('heading', {
+            name: 'Entrar',
+        })
+
+        fireEvent.change(
+            screen.getByLabelText('Nome de usuário'),
+            {
+                target: {
+                    value: 'Maria',
+                },
+            },
+        )
+
+        fireEvent.change(screen.getByLabelText('Senha'), {
+            target: {
+                value: 'senha123',
+            },
+        })
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Entrar',
+            }),
+        )
+
+        await screen.findByText('Receita da conta B')
+
+        const filtersFromB = screen.getByLabelText(
+            'Filtros de transações',
+        )
+
+        expect(
+            within(filtersFromB).getByLabelText('Ano').value,
+        ).toBe(String(currentYear))
+
+        expect(
+            within(filtersFromB).getByLabelText('Mês').value,
+        ).toBe(String(currentMonth))
+
+        expect(
+            within(filtersFromB).getByLabelText('Tipo').value,
+        ).toBe('all')
+
+        expect(
+            within(filtersFromB).getByLabelText('Categoria').value,
+        ).toBe('all')
+
+        expect(
+            within(filtersFromB).getByLabelText(
+                'Buscar por descrição',
+            ).value,
+        ).toBe('')
+
+        expect(
+            screen.getByRole('heading', {
+                name: 'Nova transação',
+            }),
+        ).toBeTruthy()
+
+        expect(screen.getByLabelText('Descrição').value).toBe('')
+        expect(screen.getByLabelText('Data').value).toBe('')
+
+        expect(
+            screen.queryByText('Despesa antiga da conta A'),
+        ).toBeNull()
+
+        expect(transactionsGetCount).toBe(2)
+    })
 })
 
