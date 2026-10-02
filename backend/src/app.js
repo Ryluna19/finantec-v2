@@ -12,12 +12,13 @@ import multer from 'multer'
 import {
   buildTransactionImportPreview,
   parseCanonicalTransactionCsv,
+  splitTransactionsByDuplicateMatch,
 } from './transactionImport.js'
 
 const SESSION_DURATION_IN_MS = 7 * 24 * 60 * 60 * 1000
 const SESSION_COOKIE_NAME = 'finantec_session'
 const MAX_TRANSACTION_IMPORT_FILE_SIZE =
-  2 * 1024 * 1024
+2 * 1024 * 1024
 
 const MAX_TRANSACTION_IMPORT_ROWS = 5000
 
@@ -25,7 +26,7 @@ const transactionImportUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize:
-      MAX_TRANSACTION_IMPORT_FILE_SIZE,
+    MAX_TRANSACTION_IMPORT_FILE_SIZE,
     files: 1,
   },
 })
@@ -42,30 +43,120 @@ function receiveTransactionImportFile(
       if (!error) {
         return next()
       }
-
       if (
         error instanceof multer.MulterError &&
         error.code === 'LIMIT_FILE_SIZE'
       ) {
         return response.status(413).json({
           error:
-            'O arquivo CSV excede o limite de 2 MB.',
+          'O arquivo CSV excede o limite de 2 MB.',
         })
       }
-
       if (error instanceof multer.MulterError) {
         return response.status(400).json({
           error:
-            'Não foi possível receber o arquivo CSV.',
+          'Não foi possível receber o arquivo CSV.',
         })
       }
-
       return response.status(400).json({
         error:
-          'Não foi possível receber o arquivo CSV.',
+        'Não foi possível receber o arquivo CSV.',
       })
     },
   )
+}
+
+function parseTransactionImportFile(file) {
+  if (!file) {
+    return {
+      status: 400,
+      error:
+      'Selecione um arquivo CSV para importar.',
+    }
+  }
+
+  if (
+    !file.originalname
+    .toLowerCase()
+    .endsWith('.csv')
+  ) {
+    return {
+      status: 415,
+      error:
+      'Formato não suportado. Envie um arquivo CSV.',
+    }
+  }
+
+  let csvContent
+
+  try {
+    csvContent = new TextDecoder(
+      'utf-8',
+      {
+        fatal: true,
+      },
+    ).decode(file.buffer)
+  } catch {
+    return {
+      status: 400,
+      error:
+      'O arquivo CSV precisa estar em UTF-8.',
+    }
+  }
+
+  let parsedImport
+
+  try {
+    parsedImport =
+    parseCanonicalTransactionCsv(
+      csvContent,
+    )
+  } catch (error) {
+    return {
+      status: 400,
+      error:
+      error instanceof Error
+      ? error.message
+      : 'Não foi possível interpretar o arquivo CSV.',
+    }
+  }
+
+  if (
+    parsedImport.totalRows >
+    MAX_TRANSACTION_IMPORT_ROWS
+  ) {
+    return {
+      status: 413,
+      error:
+      'O arquivo CSV excede o limite de 5.000 registros.',
+    }
+  }
+
+  return {
+    parsedImport,
+  }
+}
+
+function parseIncludeDuplicates(value) {
+  if (
+    value === undefined ||
+    value === 'false'
+  ) {
+    return {
+      includeDuplicates: false,
+    }
+  }
+
+  if (value === 'true') {
+    return {
+      includeDuplicates: true,
+    }
+  }
+
+  return {
+    error:
+    'A opção de duplicatas deve ser true ou false.',
+  }
 }
 
 export function createApp({ database }) {
@@ -124,7 +215,7 @@ export function createApp({ database }) {
     }
   }
 
-    function validateLoginInput({ username, password } = {}) {
+  function validateLoginInput({ username, password } = {}) {
     if (
       typeof username !== 'string' ||
       typeof password !== 'string'
@@ -137,12 +228,12 @@ export function createApp({ database }) {
     const normalizedUsername = username.trim()
 
     const credentialsAreValid =
-      normalizedUsername.length >= 3 &&
-      normalizedUsername.length <= 50 &&
-      /^[A-Za-z0-9._-]+$/.test(normalizedUsername) &&
-      Array.from(password).length >= 8 &&
-      Array.from(password).length <= 128 &&
-      password.trim().length > 0
+    normalizedUsername.length >= 3 &&
+    normalizedUsername.length <= 50 &&
+    /^[A-Za-z0-9._-]+$/.test(normalizedUsername) &&
+    Array.from(password).length >= 8 &&
+    Array.from(password).length <= 128 &&
+    password.trim().length > 0
 
     return {
       login: {
@@ -153,7 +244,7 @@ export function createApp({ database }) {
     }
   }
 
-    function getCookieValue(request, cookieName) {
+  function getCookieValue(request, cookieName) {
     const cookieHeader = request.headers.cookie
 
     if (typeof cookieHeader !== 'string') {
@@ -179,7 +270,7 @@ export function createApp({ database }) {
     return null
   }
 
-    async function requireAuthentication(request, response, next) {
+  async function requireAuthentication(request, response, next) {
     const sessionToken = getCookieValue(
       request,
       SESSION_COOKIE_NAME,
@@ -237,7 +328,7 @@ export function createApp({ database }) {
     })
   })
 
-    app.post('/auth/register', async (request, response) => {
+  app.post('/auth/register', async (request, response) => {
     const validation = validateRegistrationInput(request.body)
 
     if (validation.error) {
@@ -330,7 +421,7 @@ export function createApp({ database }) {
     }
   })
 
-    app.post('/auth/login', async (request, response) => {
+  app.post('/auth/login', async (request, response) => {
     const validation = validateLoginInput(request.body)
 
     if (validation.error) {
@@ -425,13 +516,13 @@ export function createApp({ database }) {
       })
     }
   })
-    app.get('/auth/me', requireAuthentication, (request, response) => {
+  app.get('/auth/me', requireAuthentication, (request, response) => {
     return response.json({
       user: request.user,
     })
   })
 
-    app.post('/auth/logout', async (request, response) => {
+  app.post('/auth/logout', async (request, response) => {
     const sessionToken = getCookieValue(
       request,
       SESSION_COOKIE_NAME,
@@ -479,68 +570,23 @@ export function createApp({ database }) {
   app.use('/transactions', requireAuthentication)
 
   app.post(
-  '/transactions/import/preview',
-  receiveTransactionImportFile,
+    '/transactions/import/preview',
+    receiveTransactionImportFile,
     async (request, response) => {
-      if (!request.file) {
-        return response.status(400).json({
-          error:
-            'Selecione um arquivo CSV para importar.',
+      const fileResult =
+      parseTransactionImportFile(
+        request.file,
+      )
+
+      if (fileResult.error) {
+        return response
+        .status(fileResult.status)
+        .json({
+          error: fileResult.error,
         })
       }
 
-      if (
-        !request.file.originalname
-          .toLowerCase()
-          .endsWith('.csv')
-      ) {
-        return response.status(415).json({
-          error:
-            'Formato não suportado. Envie um arquivo CSV.',
-        })
-      }
-
-      let csvContent
-
-      try {
-        csvContent = new TextDecoder(
-          'utf-8',
-          {
-            fatal: true,
-          },
-        ).decode(request.file.buffer)
-      } catch {
-        return response.status(400).json({
-          error:
-            'O arquivo CSV precisa estar em UTF-8.',
-        })
-      }
-
-      let parsedImport
-
-      try {
-        parsedImport =
-          parseCanonicalTransactionCsv(
-            csvContent,
-          )
-      } catch (error) {
-        return response.status(400).json({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Não foi possível interpretar o arquivo CSV.',
-        })
-      }
-
-      if (
-        parsedImport.totalRows >
-        MAX_TRANSACTION_IMPORT_ROWS
-      ) {
-        return response.status(413).json({
-          error:
-            'O arquivo CSV excede o limite de 5.000 registros.',
-        })
-      }
+      const { parsedImport } = fileResult
 
       try {
         const result = await database.query(
@@ -561,24 +607,24 @@ export function createApp({ database }) {
         )
 
         const existingTransactions =
-          result.rows.map(
-            (transaction) => ({
-              date: transaction.date,
-              type: transaction.type,
-              description:
-                transaction.description,
-              category: transaction.category,
-              amountInCents: Number(
-                transaction.amount_in_cents,
-              ),
-            }),
-          )
+        result.rows.map(
+          (transaction) => ({
+            date: transaction.date,
+            type: transaction.type,
+            description:
+            transaction.description,
+            category: transaction.category,
+            amountInCents: Number(
+              transaction.amount_in_cents,
+            ),
+          }),
+        )
 
         const preview =
-          buildTransactionImportPreview(
-            parsedImport,
-            existingTransactions,
-          )
+        buildTransactionImportPreview(
+          parsedImport,
+          existingTransactions,
+        )
 
         return response.json(preview)
       } catch (error) {
@@ -589,8 +635,243 @@ export function createApp({ database }) {
 
         return response.status(500).json({
           error:
-            'Não foi possível preparar a importação.',
+          'Não foi possível preparar a importação.',
         })
+      }
+    },
+  )
+
+  app.post(
+    '/transactions/import',
+    receiveTransactionImportFile,
+    async (request, response) => {
+      const fileResult =
+      parseTransactionImportFile(
+        request.file,
+      )
+
+      if (fileResult.error) {
+        return response
+        .status(fileResult.status)
+        .json({
+          error: fileResult.error,
+        })
+      }
+
+      const { parsedImport } = fileResult
+
+      const duplicateOption =
+      parseIncludeDuplicates(
+        request.body.includeDuplicates,
+      )
+
+      if (duplicateOption.error) {
+        return response.status(400).json({
+          error: duplicateOption.error,
+        })
+      }
+
+      if (
+        parsedImport.rejectedRows.length > 0
+      ) {
+        return response.status(400).json({
+          error:
+          'O arquivo CSV possui linhas inválidas.',
+          rejectedRows:
+          parsedImport.rejectedRows,
+        })
+      }
+
+      if (
+        parsedImport.validRows.length === 0
+      ) {
+        return response.status(400).json({
+          error:
+          'O arquivo CSV não possui transações válidas.',
+        })
+      }
+
+      const { includeDuplicates } =
+      duplicateOption
+
+      let client
+      let transactionStarted = false
+
+      try {
+        client = await database.connect()
+
+        await client.query('BEGIN')
+        transactionStarted = true
+
+        const existingResult =
+        await client.query(
+          `
+            SELECT
+              to_char(
+                transaction_date,
+                'YYYY-MM-DD'
+              ) AS date,
+              transaction_type AS type,
+              description,
+              category,
+              amount_in_cents
+            FROM transactions
+            WHERE user_id = $1
+          `,
+          [request.user.id],
+        )
+
+        const existingTransactions =
+        existingResult.rows.map(
+          (transaction) => ({
+            date: transaction.date,
+            type: transaction.type,
+            description:
+            transaction.description,
+            category: transaction.category,
+            amountInCents: Number(
+              transaction.amount_in_cents,
+            ),
+          }),
+        )
+
+        const {
+          newTransactions,
+          matchingTransactions,
+        } =
+        splitTransactionsByDuplicateMatch(
+          parsedImport.validRows,
+          existingTransactions,
+        )
+
+        const transactionsToInsert =
+        includeDuplicates
+        ? parsedImport.validRows
+        : newTransactions
+
+        const skippedDuplicateCount =
+        includeDuplicates
+        ? 0
+        : matchingTransactions.length
+
+        let insertedTransactions = []
+
+        if (
+          transactionsToInsert.length > 0
+        ) {
+          const values = []
+
+          const placeholders =
+          transactionsToInsert.map(
+            (transaction, index) => {
+              const parameterOffset =
+              index * 7
+
+              values.push(
+                randomUUID(),
+                request.user.id,
+                transaction.date,
+                transaction.type,
+                transaction.description,
+                transaction.category,
+                transaction.amountInCents,
+              )
+
+              return `(
+                $${parameterOffset + 1},
+                $${parameterOffset + 2},
+                $${parameterOffset + 3},
+                $${parameterOffset + 4},
+                $${parameterOffset + 5},
+                $${parameterOffset + 6},
+                $${parameterOffset + 7}
+              )`
+            },
+          )
+
+          const insertResult =
+          await client.query(
+            `
+              INSERT INTO transactions (
+                id,
+                user_id,
+                transaction_date,
+                transaction_type,
+                description,
+                category,
+                amount_in_cents
+              )
+              VALUES
+                ${placeholders.join(',')}
+              RETURNING
+                id,
+                to_char(
+                  transaction_date,
+                  'YYYY-MM-DD'
+                ) AS date,
+                description,
+                category,
+                transaction_type AS type,
+                amount_in_cents
+            `,
+            values,
+          )
+
+          insertedTransactions =
+          insertResult.rows.map(
+            (transaction) => ({
+              id: transaction.id,
+              date: transaction.date,
+              description:
+              transaction.description,
+              category:
+              transaction.category,
+              type: transaction.type,
+              amountInCents: Number(
+                transaction.amount_in_cents,
+              ),
+            }),
+          )
+        }
+
+        await client.query('COMMIT')
+        transactionStarted = false
+
+        return response.json({
+          insertedCount:
+          insertedTransactions.length,
+          skippedDuplicateCount,
+          transactions:
+          insertedTransactions,
+        })
+      } catch (error) {
+        if (
+          client &&
+          transactionStarted
+        ) {
+          try {
+            await client.query('ROLLBACK')
+          } catch (rollbackError) {
+            console.error(
+              'Failed to rollback transaction import:',
+              rollbackError,
+            )
+          }
+        }
+
+        console.error(
+          'Failed to import transactions:',
+          error,
+        )
+
+        return response.status(500).json({
+          error:
+          'Não foi possível concluir a importação.',
+        })
+      } finally {
+        if (client) {
+          client.release()
+        }
       }
     },
   )
@@ -608,8 +889,8 @@ export function createApp({ database }) {
         WHERE user_id = $1
         ORDER BY transaction_date DESC, id DESC
       `,
-      [request.user.id],
-    )
+        [request.user.id],
+      )
 
       // Mantém o formato da API separado dos nomes usados no banco.
       const databaseTransactions = result.rows.map((transaction) => ({
@@ -803,7 +1084,7 @@ export function createApp({ database }) {
           id,
           request.user.id,
         ],
-        
+
       )
 
       if (result.rowCount === 0) {

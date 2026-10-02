@@ -811,6 +811,45 @@ test('POST /transactions/import/preview reports rejected rows without persisting
   )
 })
 
+function createAuthenticatedTransactionalDatabase({
+  queryImplementation,
+  clientQueryImplementation,
+}) {
+  const client = {
+    query: clientQueryImplementation,
+    release() {},
+  }
+
+  return {
+    query: async (sql, params) => {
+      if (
+        sql.includes('FROM sessions') &&
+        sql.includes(
+          'sessions.expires_at > NOW()',
+        )
+      ) {
+        return {
+          rowCount: 1,
+          rows: [
+            AUTHENTICATED_USER,
+          ],
+        }
+      }
+
+      return queryImplementation(
+        sql,
+        params,
+      )
+    },
+
+    async connect() {
+      return client
+    },
+
+    client,
+  }
+}
+
 test('POST /transactions rejects a request without a body', async () => {
   let queryCalls = 0
 
