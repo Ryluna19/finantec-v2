@@ -7,9 +7,66 @@ import {
   hashSessionToken,
 } from './session.js'
 import { validateTransactionInput } from './transactionValidation.js'
+import multer from 'multer'
+
+import {
+  buildTransactionImportPreview,
+  parseCanonicalTransactionCsv,
+} from './transactionImport.js'
 
 const SESSION_DURATION_IN_MS = 7 * 24 * 60 * 60 * 1000
 const SESSION_COOKIE_NAME = 'finantec_session'
+const MAX_TRANSACTION_IMPORT_FILE_SIZE =
+  2 * 1024 * 1024
+
+const MAX_TRANSACTION_IMPORT_ROWS = 5000
+
+const transactionImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize:
+      MAX_TRANSACTION_IMPORT_FILE_SIZE,
+    files: 1,
+  },
+})
+
+function receiveTransactionImportFile(
+  request,
+  response,
+  next,
+) {
+  transactionImportUpload.single('file')(
+    request,
+    response,
+    (error) => {
+      if (!error) {
+        return next()
+      }
+
+      if (
+        error instanceof multer.MulterError &&
+        error.code === 'LIMIT_FILE_SIZE'
+      ) {
+        return response.status(413).json({
+          error:
+            'O arquivo CSV excede o limite de 2 MB.',
+        })
+      }
+
+      if (error instanceof multer.MulterError) {
+        return response.status(400).json({
+          error:
+            'Não foi possível receber o arquivo CSV.',
+        })
+      }
+
+      return response.status(400).json({
+        error:
+          'Não foi possível receber o arquivo CSV.',
+      })
+    },
+  )
+}
 
 export function createApp({ database }) {
   const app = express()
@@ -420,7 +477,123 @@ export function createApp({ database }) {
   })
 
   app.use('/transactions', requireAuthentication)
-  
+
+  app.post(
+  '/transactions/import/preview',
+  receiveTransactionImportFile,
+    async (request, response) => {
+      if (!request.file) {
+        return response.status(400).json({
+          error:
+            'Selecione um arquivo CSV para importar.',
+        })
+      }
+
+      if (
+        !request.file.originalname
+          .toLowerCase()
+          .endsWith('.csv')
+      ) {
+        return response.status(415).json({
+          error:
+            'Formato não suportado. Envie um arquivo CSV.',
+        })
+      }
+
+      let csvContent
+
+      try {
+        csvContent = new TextDecoder(
+          'utf-8',
+          {
+            fatal: true,
+          },
+        ).decode(request.file.buffer)
+      } catch {
+        return response.status(400).json({
+          error:
+            'O arquivo CSV precisa estar em UTF-8.',
+        })
+      }
+
+      let parsedImport
+
+      try {
+        parsedImport =
+          parseCanonicalTransactionCsv(
+            csvContent,
+          )
+      } catch (error) {
+        return response.status(400).json({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Não foi possível interpretar o arquivo CSV.',
+        })
+      }
+
+      if (
+        parsedImport.totalRows >
+        MAX_TRANSACTION_IMPORT_ROWS
+      ) {
+        return response.status(413).json({
+          error:
+            'O arquivo CSV excede o limite de 5.000 registros.',
+        })
+      }
+
+      try {
+        const result = await database.query(
+          `
+            SELECT
+              to_char(
+                transaction_date,
+                'YYYY-MM-DD'
+              ) AS date,
+              transaction_type AS type,
+              description,
+              category,
+              amount_in_cents
+            FROM transactions
+            WHERE user_id = $1
+          `,
+          [request.user.id],
+        )
+
+        const existingTransactions =
+          result.rows.map(
+            (transaction) => ({
+              date: transaction.date,
+              type: transaction.type,
+              description:
+                transaction.description,
+              category: transaction.category,
+              amountInCents: Number(
+                transaction.amount_in_cents,
+              ),
+            }),
+          )
+
+        const preview =
+          buildTransactionImportPreview(
+            parsedImport,
+            existingTransactions,
+          )
+
+        return response.json(preview)
+      } catch (error) {
+        console.error(
+          'Failed to preview transaction import:',
+          error,
+        )
+
+        return response.status(500).json({
+          error:
+            'Não foi possível preparar a importação.',
+        })
+      }
+    },
+  )
   app.get('/transactions', async (request, response) => {
     try {
       const result = await database.query(`

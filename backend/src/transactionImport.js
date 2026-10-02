@@ -255,3 +255,46 @@ export function parseCanonicalTransactionCsv(
     rejectedRows,
   }
 }
+
+export function buildTransactionImportPreview(
+  parsedImport,
+  existingTransactions,
+) {
+  const {
+    newTransactions,
+    matchingTransactions,
+  } = splitTransactionsByDuplicateMatch(
+    parsedImport.validRows,
+    existingTransactions,
+  )
+
+  const duplicateRowNumbers = new Set(
+    matchingTransactions.map(
+      (transaction) => transaction.rowNumber,
+    ),
+  )
+
+  return {
+    totalRows: parsedImport.totalRows,
+    validCount: parsedImport.validRows.length,
+    rejectedCount:
+      parsedImport.rejectedRows.length,
+    possibleDuplicateCount:
+      matchingTransactions.length,
+    defaultImportCount: newTransactions.length,
+    validRows: parsedImport.validRows.map(
+      (transaction) => ({
+        ...transaction,
+        isPossibleDuplicate:
+          duplicateRowNumbers.has(
+            transaction.rowNumber,
+          ),
+      }),
+    ),
+    rejectedRows: parsedImport.rejectedRows,
+    canConfirm:
+      parsedImport.rejectedRows.length === 0 &&
+      parsedImport.validRows.length > 0 &&
+      newTransactions.length > 0,
+  }
+}

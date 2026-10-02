@@ -633,6 +633,7 @@ test('transaction routes require authentication', async () => {
   const routes = [
     ['get', '/transactions'],
     ['post', '/transactions'],
+    ['post', '/transactions/import/preview'],
     [
       'put',
       '/transactions/6b959525-67fc-453c-b4b2-956058724f22',
@@ -652,6 +653,162 @@ test('transaction routes require authentication', async () => {
       error: 'Sessão inválida ou expirada.',
     })
   }
+})
+
+test('POST /transactions/import/preview returns normalized rows and possible duplicates without inserting', async () => {
+  let transactionQueries = 0
+
+  const database =
+    createAuthenticatedDatabase(
+      async (sql, params) => {
+        transactionQueries += 1
+
+        assert.match(
+          sql,
+          /FROM transactions/,
+        )
+
+        assert.match(
+          sql,
+          /WHERE user_id = \$1/,
+        )
+
+        assert.deepEqual(params, [
+          AUTHENTICATED_USER.id,
+        ])
+
+        assert.doesNotMatch(
+          sql,
+          /INSERT INTO transactions/,
+        )
+
+        return {
+          rowCount: 1,
+          rows: [
+            {
+              date: '2026-10-05',
+              type: 'expense',
+              description: 'Mercado',
+              category: 'Alimentação',
+              amount_in_cents: '20000',
+            },
+          ],
+        }
+      },
+    )
+
+  const app = createApp({
+    database,
+  })
+
+  const csv = [
+    '\uFEFFdata,tipo,descricao,categoria,valor',
+    '2026-10-05,despesa,Mercado,Alimentação,200.00',
+    '2026-10-06,receita,Freelance,Trabalho,500.00',
+  ].join('\n')
+
+  const response = await request(app)
+    .post('/transactions/import/preview')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+    .attach(
+      'file',
+      Buffer.from(csv, 'utf8'),
+      'transacoes.csv',
+    )
+
+  assert.equal(response.status, 200)
+
+  assert.equal(transactionQueries, 1)
+
+  assert.deepEqual(response.body, {
+    totalRows: 2,
+    validCount: 2,
+    rejectedCount: 0,
+    possibleDuplicateCount: 1,
+    defaultImportCount: 1,
+    validRows: [
+      {
+        rowNumber: 2,
+        date: '2026-10-05',
+        type: 'expense',
+        description: 'Mercado',
+        category: 'Alimentação',
+        amountInCents: 20000,
+        isPossibleDuplicate: true,
+      },
+      {
+        rowNumber: 3,
+        date: '2026-10-06',
+        type: 'income',
+        description: 'Freelance',
+        category: 'Trabalho',
+        amountInCents: 50000,
+        isPossibleDuplicate: false,
+      },
+    ],
+    rejectedRows: [],
+    canConfirm: true,
+  })
+})
+
+test('POST /transactions/import/preview reports rejected rows without persisting anything', async () => {
+  const database =
+    createAuthenticatedDatabase(
+      async (sql) => {
+        assert.doesNotMatch(
+          sql,
+          /INSERT INTO transactions/,
+        )
+
+        return {
+          rowCount: 0,
+          rows: [],
+        }
+      },
+    )
+
+  const app = createApp({
+    database,
+  })
+
+  const csv = [
+    'data,tipo,descricao,categoria,valor',
+    '2026-10-05,despesa,Mercado,Alimentação,100.00',
+    'data-invalida,,   ,,abc',
+  ].join('\n')
+
+  const response = await request(app)
+    .post('/transactions/import/preview')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+    .attach(
+      'file',
+      Buffer.from(csv, 'utf8'),
+      'transacoes.csv',
+    )
+
+  assert.equal(response.status, 200)
+
+  assert.equal(response.body.totalRows, 2)
+  assert.equal(response.body.validCount, 1)
+  assert.equal(response.body.rejectedCount, 1)
+  assert.equal(response.body.canConfirm, false)
+
+  assert.deepEqual(
+    response.body.rejectedRows[0].reasons,
+    [
+      'data invalida ou vazia',
+      'descricao vazia',
+      'categoria vazia',
+      'tipo vazio',
+      'valor invalido ou vazio',
+    ],
+  )
 })
 
 test('POST /transactions rejects a request without a body', async () => {
