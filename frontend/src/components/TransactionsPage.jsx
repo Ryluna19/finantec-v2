@@ -13,7 +13,6 @@ function TransactionsPage({
   addTransaction,
   updateTransaction,
   deleteTransaction,
-  onLogout,
 }) {
   const today = new Date()
   const currentYear = today.getFullYear()
@@ -184,13 +183,6 @@ function TransactionsPage({
             Organize suas receitas, despesas e reservas.
           </p>
         </div>
-
-        <button
-          type="button"
-          onClick={onLogout}
-        >
-          Sair
-        </button>
       </header>
 
       <section

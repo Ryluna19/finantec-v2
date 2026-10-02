@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import OverviewPage from './OverviewPage'
 import TransactionsPage from './TransactionsPage'
 import useTransactions from '../hooks/useTransactions'
 
@@ -10,6 +11,14 @@ function AuthenticatedShell({
 }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] =
     useState(false)
+
+  /*
+   * Mantemos Transações como inicial somente durante
+   * esta etapa para preservar a suíte existente.
+   * A Visão Geral será a tela inicial no próximo incremento.
+   */
+  const [activeView, setActiveView] =
+    useState('transactions')
 
   const {
     transactions,
@@ -34,9 +43,8 @@ function AuthenticatedShell({
     >
       <aside className="sidebar">
         <div className="sidebar-header">
-          <a
+          <span
             className="brand"
-            href="#transactions"
             aria-label="FinanTec"
           >
             <span className="brand-name">
@@ -49,7 +57,7 @@ function AuthenticatedShell({
             >
               FT
             </span>
-          </a>
+          </span>
 
           <button
             className="sidebar-toggle"
@@ -79,11 +87,71 @@ function AuthenticatedShell({
           id="sidebar-navigation"
           aria-label="Navegação principal"
         >
-          <a
-            className="nav-link"
-            href="#transactions"
-            aria-current="page"
-            aria-label="Transações"
+          <button
+            className="nav-link nav-button"
+            type="button"
+            onClick={() =>
+              setActiveView('overview')
+            }
+            aria-current={
+              activeView === 'overview'
+                ? 'page'
+                : undefined
+            }
+            title="Visão geral"
+          >
+            <svg
+              className="nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect
+                x="3"
+                y="3"
+                width="7"
+                height="7"
+              />
+              <rect
+                x="14"
+                y="3"
+                width="7"
+                height="7"
+              />
+              <rect
+                x="3"
+                y="14"
+                width="7"
+                height="7"
+              />
+              <rect
+                x="14"
+                y="14"
+                width="7"
+                height="7"
+              />
+            </svg>
+
+            <span className="nav-label">
+              Visão geral
+            </span>
+          </button>
+
+          <button
+            className="nav-link nav-button"
+            type="button"
+            onClick={() =>
+              setActiveView('transactions')
+            }
+            aria-current={
+              activeView === 'transactions'
+                ? 'page'
+                : undefined
+            }
             title="Transações"
           >
             <svg
@@ -102,27 +170,63 @@ function AuthenticatedShell({
             <span className="nav-label">
               Transações
             </span>
-          </a>
+          </button>
         </nav>
+
+        <button
+          className="nav-link nav-button sidebar-logout"
+          type="button"
+          onClick={onLogout}
+        >
+          <svg
+            className="nav-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M10 17l5-5-5-5" />
+            <path d="M15 12H3" />
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+          </svg>
+
+          <span className="nav-label">
+            Sair
+          </span>
+        </button>
       </aside>
 
-      <TransactionsPage
-        transactions={transactions}
-        isLoadingTransactions={
-          isLoadingTransactions
-        }
-        transactionsLoadError={
-          transactionsLoadError
-        }
-        addTransaction={addTransaction}
-        updateTransaction={
-          updateTransaction
-        }
-        deleteTransaction={
-          deleteTransaction
-        }
-        onLogout={onLogout}
-      />
+      {activeView === 'overview' ? (
+        <OverviewPage
+          transactions={transactions}
+          isLoadingTransactions={
+            isLoadingTransactions
+          }
+          transactionsLoadError={
+            transactionsLoadError
+          }
+        />
+      ) : (
+        <TransactionsPage
+          transactions={transactions}
+          isLoadingTransactions={
+            isLoadingTransactions
+          }
+          transactionsLoadError={
+            transactionsLoadError
+          }
+          addTransaction={addTransaction}
+          updateTransaction={
+            updateTransaction
+          }
+          deleteTransaction={
+            deleteTransaction
+          }
+        />
+      )}
     </div>
   )
 }

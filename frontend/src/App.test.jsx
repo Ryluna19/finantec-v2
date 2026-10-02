@@ -1821,6 +1821,141 @@ describe('App transactions', () => {
         expect(transactionsGetCount).toBe(2)
     })
 
+    it('shows the financial overview without loading transactions again', async () => {
+        const today = new Date()
+        const currentYear = today.getFullYear()
+        const currentMonth = today.getMonth() + 1
+
+        const currentMonthText = String(
+            currentMonth,
+        ).padStart(2, '0')
+
+        const transactions = [
+            {
+                id: '91919191-9191-4919-8919-919191919191',
+                date: `${currentYear}-${currentMonthText}-05`,
+                description: 'Salário',
+                category: 'Trabalho',
+                type: 'income',
+                amountInCents: 80000,
+            },
+            {
+                id: '92929292-9292-4929-8929-929292929292',
+                date: `${currentYear}-${currentMonthText}-10`,
+                description: 'Mercado',
+                category: 'Casa',
+                type: 'expense',
+                amountInCents: 5500,
+            },
+            {
+                id: '93939393-9393-4939-8939-939393939393',
+                date: `${currentYear}-${currentMonthText}-15`,
+                description: 'Reserva mensal',
+                category: 'Reserva',
+                type: 'expense',
+                amountInCents: 10000,
+            },
+            {
+                id: '94949494-9494-4949-8949-949494949494',
+                date: `${currentYear - 1}-06-15`,
+                description: 'Transação fora do período',
+                category: 'Teste',
+                type: 'income',
+                amountInCents: 900000,
+            },
+        ]
+
+        let transactionsGetCount = 0
+
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        user: AUTHENTICATED_USER,
+                    }),
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                !options.method
+            ) {
+                transactionsGetCount += 1
+
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => transactions,
+                })
+            }
+
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
+
+        vi.stubGlobal('fetch', fetchMock)
+
+        render(<App />)
+
+        await screen.findByText('Salário')
+
+        expect(transactionsGetCount).toBe(1)
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Visão geral',
+            }),
+        )
+
+        await screen.findByRole('heading', {
+            name: 'Visão geral',
+        })
+
+        const summary = screen.getByLabelText(
+            'Resumo financeiro do período',
+        )
+
+        expect(
+            within(summary).getByText('R$ 64,50'),
+        ).toBeTruthy()
+
+        expect(
+            within(summary).getByText('R$ 800,00'),
+        ).toBeTruthy()
+
+        expect(
+            within(summary).getByText('R$ 55,00'),
+        ).toBeTruthy()
+
+        expect(
+            within(summary).getByText('R$ 100,00'),
+        ).toBeTruthy()
+
+        expect(
+            screen.queryByText(
+                'Transação fora do período',
+            ),
+        ).toBeNull()
+
+        expect(transactionsGetCount).toBe(1)
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Transações',
+            }),
+        )
+
+        await screen.findByText('Salário')
+
+        expect(transactionsGetCount).toBe(1)
+    })
+
     it('clears private filters and editing when another user signs in', async () => {
         const userB = {
             id: '51515151-5151-4515-8515-515151515151',
