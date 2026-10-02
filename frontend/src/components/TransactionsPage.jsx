@@ -1,18 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import TransactionForm from './TransactionForm'
 import TransactionFilters from './TransactionFilters'
 import TransactionList from './TransactionList'
 import TransactionSummary from './TransactionSummary'
 import useTransactionFilters from '../hooks/useTransactionFilters'
+import useTransactions from '../hooks/useTransactions'
 import { filterTransactionsByPeriod } from '../transactionSelectors'
-
-function sortTransactions(transactionList) {
-  return [...transactionList].sort(
-    (first, second) =>
-      second.date.localeCompare(first.date) ||
-      second.id.localeCompare(first.id),
-  )
-}
 
 function TransactionsPage({
   captureAuthGeneration,
@@ -24,18 +17,21 @@ function TransactionsPage({
   const currentYear = today.getFullYear()
   const currentMonth = today.getMonth() + 1
 
-  const [transactions, setTransactions] = useState([])
   const [editingTransaction, setEditingTransaction] =
     useState(null)
 
-  const [isLoadingTransactions, setIsLoadingTransactions] =
-    useState(true)
-
-  const [transactionsLoadError, setTransactionsLoadError] =
-    useState(null)
-
-  const transactionsRef = useRef([])
-  const mutationVersionRef = useRef(0)
+  const {
+    transactions,
+    isLoadingTransactions,
+    transactionsLoadError,
+    addTransaction,
+    updateTransaction,
+    deleteTransaction,
+  } = useTransactions({
+    captureAuthGeneration,
+    isCurrentAuthGeneration,
+    expireSession,
+  })
 
   const {
     selectedYear,
@@ -53,102 +49,6 @@ function TransactionsPage({
     currentYear,
     currentMonth,
   })
-
-  useEffect(() => {
-    let isActive = true
-
-    async function loadTransactions() {
-      const authGenerationAtStart =
-        captureAuthGeneration()
-
-      const mutationVersionAtStart =
-        mutationVersionRef.current
-
-      setIsLoadingTransactions(true)
-      setTransactionsLoadError(null)
-
-      try {
-        const response = await fetch(
-          'http://localhost:3000/transactions',
-          {
-            credentials: 'include',
-          },
-        )
-
-        if (
-          !isActive ||
-          !isCurrentAuthGeneration(
-            authGenerationAtStart,
-          )
-        ) {
-          return
-        }
-
-        if (response.status === 401) {
-          expireSession(authGenerationAtStart)
-          return
-        }
-
-        if (!response.ok) {
-          throw new Error(
-            'Não foi possível carregar as transações.',
-          )
-        }
-
-        const data = await response.json()
-
-        if (
-          !isActive ||
-          !isCurrentAuthGeneration(
-            authGenerationAtStart,
-          ) ||
-          mutationVersionRef.current !==
-            mutationVersionAtStart
-        ) {
-          return
-        }
-
-        transactionsRef.current = data
-        setTransactions(data)
-      } catch (error) {
-        if (
-          !isActive ||
-          !isCurrentAuthGeneration(
-            authGenerationAtStart,
-          ) ||
-          mutationVersionRef.current !==
-            mutationVersionAtStart
-        ) {
-          return
-        }
-
-        console.error(error)
-
-        setTransactionsLoadError(
-          'Não foi possível carregar as transações.',
-        )
-      } finally {
-        if (
-          isActive &&
-          isCurrentAuthGeneration(
-            authGenerationAtStart,
-          )
-        ) {
-          setIsLoadingTransactions(false)
-        }
-      }
-    }
-
-    loadTransactions()
-
-    return () => {
-      isActive = false
-    }
-  }, [
-    captureAuthGeneration,
-    isCurrentAuthGeneration,
-    expireSession,
-  ])
 
   const availableYears = [
     ...new Set([
@@ -242,253 +142,40 @@ function TransactionsPage({
       },
     )
 
-  function updateTransactions(updater) {
-    const nextTransactions =
-      typeof updater === 'function'
-        ? updater(transactionsRef.current)
-        : updater
-
-    transactionsRef.current = nextTransactions
-    mutationVersionRef.current += 1
-
-    setTransactions(nextTransactions)
-
-    return nextTransactions
-  }
-
-  async function handleAddTransaction(
-    transactionData,
-  ) {
-    const authGenerationAtStart =
-      captureAuthGeneration()
-
-    try {
-      const response = await fetch(
-        'http://localhost:3000/transactions',
-        {
-          credentials: 'include',
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(transactionData),
-        },
-      )
-
-      if (
-        !isCurrentAuthGeneration(
-          authGenerationAtStart,
-        )
-      ) {
-        return
-      }
-
-      if (response.status === 401) {
-        expireSession(authGenerationAtStart)
-        return
-      }
-
-      const data = await response.json()
-
-      if (
-        !isCurrentAuthGeneration(
-          authGenerationAtStart,
-        )
-      ) {
-        return
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          data.error ||
-            'Não foi possível cadastrar a transação.',
-        )
-      }
-
-      updateTransactions((previous) =>
-        sortTransactions([data, ...previous]),
-      )
-    } catch (error) {
-      if (
-        !isCurrentAuthGeneration(
-          authGenerationAtStart,
-        )
-      ) {
-        return
-      }
-
-      throw error
-    }
-  }
-
   async function handleUpdateTransaction(
     id,
     transactionData,
   ) {
-    const authGenerationAtStart =
-      captureAuthGeneration()
-
-    try {
-      const response = await fetch(
-        `http://localhost:3000/transactions/${id}`,
-        {
-          credentials: 'include',
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(transactionData),
-        },
+    const nextTransactions =
+      await updateTransaction(
+        id,
+        transactionData,
       )
 
-      if (
-        !isCurrentAuthGeneration(
-          authGenerationAtStart,
-        )
-      ) {
-        return
-      }
-
-      if (response.status === 401) {
-        expireSession(authGenerationAtStart)
-        return
-      }
-
-      const data = await response.json()
-
-      if (
-        !isCurrentAuthGeneration(
-          authGenerationAtStart,
-        )
-      ) {
-        return
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          data.error ||
-            'Não foi possível atualizar a transação.',
-        )
-      }
-
-      const nextTransactions =
-        updateTransactions((previous) =>
-          sortTransactions(
-            previous.map((transaction) =>
-              transaction.id === id
-                ? data
-                : transaction,
-            ),
-          ),
-        )
-
-      reconcileFilters(nextTransactions)
-
-      setEditingTransaction((current) =>
-        current?.id === id ? null : current,
-      )
-    } catch (error) {
-      if (
-        !isCurrentAuthGeneration(
-          authGenerationAtStart,
-        )
-      ) {
-        return
-      }
-
-      throw error
+    if (nextTransactions === null) {
+      return
     }
+
+    reconcileFilters(nextTransactions)
+
+    setEditingTransaction((current) =>
+      current?.id === id ? null : current,
+    )
   }
 
   async function handleDeleteTransaction(id) {
-    const authGenerationAtStart =
-      captureAuthGeneration()
+    const nextTransactions =
+      await deleteTransaction(id)
 
-    try {
-      const response = await fetch(
-        `http://localhost:3000/transactions/${id}`,
-        {
-          credentials: 'include',
-          method: 'DELETE',
-        },
-      )
-
-      if (
-        !isCurrentAuthGeneration(
-          authGenerationAtStart,
-        )
-      ) {
-        return
-      }
-
-      if (response.status === 401) {
-        expireSession(authGenerationAtStart)
-        return
-      }
-
-      if (!response.ok) {
-        let message =
-          'Não foi possível excluir a transação.'
-
-        try {
-          const data = await response.json()
-
-          if (
-            !isCurrentAuthGeneration(
-              authGenerationAtStart,
-            )
-          ) {
-            return
-          }
-
-          message = data.error || message
-        } catch {
-          if (
-            !isCurrentAuthGeneration(
-              authGenerationAtStart,
-            )
-          ) {
-            return
-          }
-
-          // Mantém a mensagem padrão se a resposta não possuir JSON válido.
-        }
-
-        throw new Error(message)
-      }
-
-      if (
-        !isCurrentAuthGeneration(
-          authGenerationAtStart,
-        )
-      ) {
-        return
-      }
-
-      const nextTransactions =
-        updateTransactions((previous) =>
-          previous.filter(
-            (transaction) =>
-              transaction.id !== id,
-          ),
-        )
-
-      reconcileFilters(nextTransactions)
-
-      setEditingTransaction((current) =>
-        current?.id === id ? null : current,
-      )
-    } catch (error) {
-      if (
-        !isCurrentAuthGeneration(
-          authGenerationAtStart,
-        )
-      ) {
-        return
-      }
-
-      throw error
+    if (nextTransactions === null) {
+      return
     }
+
+    reconcileFilters(nextTransactions)
+
+    setEditingTransaction((current) =>
+      current?.id === id ? null : current,
+    )
   }
 
   const emptyTransactionMessage =
@@ -534,9 +221,7 @@ function TransactionsPage({
         <TransactionForm
           key={editingTransaction?.id ?? 'new'}
           transaction={editingTransaction}
-          onAddTransaction={
-            handleAddTransaction
-          }
+          onAddTransaction={addTransaction}
           onUpdateTransaction={
             handleUpdateTransaction
           }
