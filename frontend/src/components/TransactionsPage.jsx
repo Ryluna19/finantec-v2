@@ -4,13 +4,15 @@ import TransactionFilters from './TransactionFilters'
 import TransactionList from './TransactionList'
 import TransactionSummary from './TransactionSummary'
 import useTransactionFilters from '../hooks/useTransactionFilters'
-import useTransactions from '../hooks/useTransactions'
 import { filterTransactionsByPeriod } from '../transactionSelectors'
 
 function TransactionsPage({
-  captureAuthGeneration,
-  isCurrentAuthGeneration,
-  expireSession,
+  transactions,
+  isLoadingTransactions,
+  transactionsLoadError,
+  addTransaction,
+  updateTransaction,
+  deleteTransaction,
   onLogout,
 }) {
   const today = new Date()
@@ -19,19 +21,6 @@ function TransactionsPage({
 
   const [editingTransaction, setEditingTransaction] =
     useState(null)
-
-  const {
-    transactions,
-    isLoadingTransactions,
-    transactionsLoadError,
-    addTransaction,
-    updateTransaction,
-    deleteTransaction,
-  } = useTransactions({
-    captureAuthGeneration,
-    isCurrentAuthGeneration,
-    expireSession,
-  })
 
   const {
     selectedYear,
