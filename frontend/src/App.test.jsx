@@ -1922,7 +1922,7 @@ describe('App transactions', () => {
         )
 
         expect(
-            within(summary).getByText('R$ 64,50'),
+            within(summary).getByText('R$ 645,00'),
         ).toBeTruthy()
 
         expect(

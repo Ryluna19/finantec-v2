@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import TransactionForm from './TransactionForm'
 import TransactionFilters from './TransactionFilters'
+import TransactionImport from './TransactionImport'
 import TransactionList from './TransactionList'
 import TransactionSummary from './TransactionSummary'
 import useTransactionFilters from '../hooks/useTransactionFilters'
@@ -13,6 +14,8 @@ function TransactionsPage({
   addTransaction,
   updateTransaction,
   deleteTransaction,
+  previewTransactionImport,
+  importTransactions,
 }) {
   const today = new Date()
   const currentYear = today.getFullYear()
@@ -184,6 +187,15 @@ function TransactionsPage({
           </p>
         </div>
       </header>
+
+      <TransactionImport
+        onPreviewImport={
+          previewTransactionImport
+        }
+        onImportTransactions={
+          importTransactions
+        }
+      />
 
       <section
         className="panel"

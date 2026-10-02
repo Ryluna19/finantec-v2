@@ -27,11 +27,13 @@ function AuthenticatedShell({
     addTransaction,
     updateTransaction,
     deleteTransaction,
-  } = useTransactions({
+    previewTransactionImport,
+    importTransactions,
+    } = useTransactions({
     captureAuthGeneration,
     isCurrentAuthGeneration,
     expireSession,
-  })
+    })
 
   return (
     <div
@@ -210,21 +212,23 @@ function AuthenticatedShell({
           }
         />
       ) : (
-        <TransactionsPage
-          transactions={transactions}
-          isLoadingTransactions={
+       <TransactionsPage
+        transactions={transactions}
+        isLoadingTransactions={
             isLoadingTransactions
-          }
-          transactionsLoadError={
+        }
+        transactionsLoadError={
             transactionsLoadError
-          }
-          addTransaction={addTransaction}
-          updateTransaction={
-            updateTransaction
-          }
-          deleteTransaction={
-            deleteTransaction
-          }
+        }
+        addTransaction={addTransaction}
+        updateTransaction={updateTransaction}
+        deleteTransaction={deleteTransaction}
+        previewTransactionImport={
+            previewTransactionImport
+        }
+        importTransactions={
+            importTransactions
+        }
         />
       )}
     </div>

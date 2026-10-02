@@ -17,13 +17,18 @@ function useTransactions({
   isCurrentAuthGeneration,
   expireSession,
 }) {
-  const [transactions, setTransactions] = useState([])
+  const [transactions, setTransactions] =
+    useState([])
 
-  const [isLoadingTransactions, setIsLoadingTransactions] =
-    useState(true)
+  const [
+    isLoadingTransactions,
+    setIsLoadingTransactions,
+  ] = useState(true)
 
-  const [transactionsLoadError, setTransactionsLoadError] =
-    useState(null)
+  const [
+    transactionsLoadError,
+    setTransactionsLoadError,
+  ] = useState(null)
 
   const transactionsRef = useRef([])
   const mutationVersionRef = useRef(0)
@@ -357,6 +362,147 @@ function useTransactions({
     }
   }
 
+  async function previewTransactionImport(file) {
+    const authGenerationAtStart =
+      captureAuthGeneration()
+
+    const formData = new FormData()
+
+    formData.append('file', file)
+
+    try {
+      const response = await fetch(
+        'http://localhost:3000/transactions/import/preview',
+        {
+          credentials: 'include',
+          method: 'POST',
+          body: formData,
+        },
+      )
+
+      if (
+        !isCurrentAuthGeneration(
+          authGenerationAtStart,
+        )
+      ) {
+        return null
+      }
+
+      if (response.status === 401) {
+        expireSession(authGenerationAtStart)
+        return null
+      }
+
+      const data = await response.json()
+
+      if (
+        !isCurrentAuthGeneration(
+          authGenerationAtStart,
+        )
+      ) {
+        return null
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            'Não foi possível preparar a importação.',
+        )
+      }
+
+      return data
+    } catch (error) {
+      if (
+        !isCurrentAuthGeneration(
+          authGenerationAtStart,
+        )
+      ) {
+        return null
+      }
+
+      throw error
+    }
+  }
+
+  async function importTransactions(
+    file,
+    includeDuplicates,
+  ) {
+    const authGenerationAtStart =
+      captureAuthGeneration()
+
+    const formData = new FormData()
+
+    formData.append('file', file)
+
+    formData.append(
+      'includeDuplicates',
+      String(includeDuplicates),
+    )
+
+    try {
+      const response = await fetch(
+        'http://localhost:3000/transactions/import',
+        {
+          credentials: 'include',
+          method: 'POST',
+          body: formData,
+        },
+      )
+
+      if (
+        !isCurrentAuthGeneration(
+          authGenerationAtStart,
+        )
+      ) {
+        return null
+      }
+
+      if (response.status === 401) {
+        expireSession(authGenerationAtStart)
+        return null
+      }
+
+      const data = await response.json()
+
+      if (
+        !isCurrentAuthGeneration(
+          authGenerationAtStart,
+        )
+      ) {
+        return null
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            'Não foi possível concluir a importação.',
+        )
+      }
+
+      if (data.transactions.length > 0) {
+        updateTransactions((previous) =>
+          sortTransactions([
+            ...data.transactions,
+            ...previous,
+          ]),
+        )
+      }
+
+      return data
+    } catch (error) {
+      if (
+        !isCurrentAuthGeneration(
+          authGenerationAtStart,
+        )
+      ) {
+        return null
+      }
+
+      throw error
+    }
+  }
+
   return {
     transactions,
     isLoadingTransactions,
@@ -364,6 +510,8 @@ function useTransactions({
     addTransaction,
     updateTransaction,
     deleteTransaction,
+    previewTransactionImport,
+    importTransactions,
   }
 }
 
