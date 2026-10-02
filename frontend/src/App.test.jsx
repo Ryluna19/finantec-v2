@@ -47,6 +47,18 @@ async function resolveDeferredPromise(deferred, value) {
         await Promise.resolve()
     })
 }
+async function rejectDeferredPromise(deferred, error) {
+    await act(async () => {
+        deferred.reject(error)
+
+        /*
+         * Consome a rejeição também pelo lado do teste enquanto permite
+         * que o código da aplicação execute seu próprio catch.
+         */
+        await deferred.promise.catch(() => { })
+        await Promise.resolve()
+    })
+}
 
 function createAuthenticatedSessionResponse() {
     return Promise.resolve({
@@ -458,7 +470,10 @@ describe('App transactions', () => {
 
         await screen.findByText('Carregando transações...')
 
-        initialGet.reject(new Error('Backend unavailable'))
+        await rejectDeferredPromise(
+            initialGet,
+            new Error('Backend unavailable'),
+        )
 
         await waitFor(() => {
             expect(screen.getByRole('alert').textContent).toContain(
@@ -1615,6 +1630,195 @@ describe('App transactions', () => {
         expect(categoryFilter.value).toBe('all')
 
         expect(screen.getByText('Freela')).toBeTruthy()
+    })
+
+    it('ignores a pending DELETE from the previous user after another user signs in', async () => {
+        const pendingDelete = createDeferredPromise()
+
+        const userB = {
+            id: '81818181-8181-4818-8818-818181818181',
+            username: 'Maria',
+        }
+
+        const today = new Date()
+
+        const transactionDate = [
+            today.getFullYear(),
+            String(today.getMonth() + 1).padStart(2, '0'),
+            '15',
+        ].join('-')
+
+        const transactionFromA = {
+            id: '82828282-8282-4828-8828-828282828282',
+            date: transactionDate,
+            description: 'Excluir da conta A',
+            category: 'Teste',
+            type: 'expense',
+            amountInCents: 10000,
+        }
+
+        const transactionFromB = {
+            id: '83838383-8383-4838-8838-838383838383',
+            date: transactionDate,
+            description: 'Transação preservada da conta B',
+            category: 'Trabalho',
+            type: 'income',
+            amountInCents: 50000,
+        }
+
+        let transactionsGetCount = 0
+
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        user: AUTHENTICATED_USER,
+                    }),
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                !options.method
+            ) {
+                transactionsGetCount += 1
+
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () =>
+                        transactionsGetCount === 1
+                            ? [transactionFromA]
+                            : [transactionFromB],
+                })
+            }
+
+            if (
+                url ===
+                `http://localhost:3000/transactions/${transactionFromA.id}` &&
+                options.method === 'DELETE'
+            ) {
+                return pendingDelete.promise
+            }
+
+            if (
+                url === 'http://localhost:3000/auth/logout' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 204,
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/auth/login' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        user: userB,
+                    }),
+                })
+            }
+
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
+
+        vi.stubGlobal('fetch', fetchMock)
+
+        vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+        const alertSpy = vi
+            .spyOn(window, 'alert')
+            .mockImplementation(() => { })
+
+        render(<App />)
+
+        await screen.findByText('Excluir da conta A')
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Excluir Excluir da conta A',
+            }),
+        )
+
+        expect(
+            fetchMock.mock.calls.some(
+                ([url, options = {}]) =>
+                    url ===
+                    `http://localhost:3000/transactions/${transactionFromA.id}` &&
+                    options.method === 'DELETE',
+            ),
+        ).toBe(true)
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Sair',
+            }),
+        )
+
+        await screen.findByRole('heading', {
+            name: 'Entrar',
+        })
+
+        fireEvent.change(
+            screen.getByLabelText('Nome de usuário'),
+            {
+                target: {
+                    value: 'Maria',
+                },
+            },
+        )
+
+        fireEvent.change(screen.getByLabelText('Senha'), {
+            target: {
+                value: 'senha123',
+            },
+        })
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Entrar',
+            }),
+        )
+
+        await screen.findByText(
+            'Transação preservada da conta B',
+        )
+
+        await resolveDeferredPromise(pendingDelete, {
+            ok: true,
+            status: 204,
+        })
+
+        expect(
+            screen.getByText(
+                'Transação preservada da conta B',
+            ),
+        ).toBeTruthy()
+
+        expect(
+            screen.queryByText('Excluir da conta A'),
+        ).toBeNull()
+
+        expect(
+            screen.queryByRole('heading', {
+                name: 'Entrar',
+            }),
+        ).toBeNull()
+
+        expect(alertSpy).not.toHaveBeenCalled()
+        expect(transactionsGetCount).toBe(2)
     })
 
     it('clears private filters and editing when another user signs in', async () => {
