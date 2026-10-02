@@ -1956,6 +1956,163 @@ describe('App transactions', () => {
         expect(transactionsGetCount).toBe(1)
     })
 
+        it('imports a CSV into Movimentações without a second transactions GET', async () => {
+        const today = new Date()
+        const transactionDate = [
+            today.getFullYear(),
+            String(today.getMonth() + 1).padStart(2, '0'),
+            '15',
+        ].join('-')
+
+        const importedTransaction = {
+            id: '55555555-5555-4555-8555-555555555555',
+            date: transactionDate,
+            type: 'income',
+            description: 'Freelance importado',
+            category: 'Trabalho',
+            amountInCents: 150000,
+        }
+
+        const csvFile = new File(
+            [
+                'data,tipo,descricao,categoria,valor\n',
+                `${transactionDate},receita,Freelance importado,Trabalho,1500.00\n`,
+            ],
+            'transacoes.csv',
+            { type: 'text/csv' },
+        )
+
+        let transactionsGetCount = 0
+
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return createAuthenticatedSessionResponse()
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                !options.method
+            ) {
+                transactionsGetCount += 1
+
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => [],
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions/import/preview' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        totalRows: 1,
+                        validCount: 1,
+                        rejectedCount: 0,
+                        possibleDuplicateCount: 0,
+                        defaultImportCount: 1,
+                        validRows: [
+                            {
+                                rowNumber: 2,
+                                date: transactionDate,
+                                type: 'income',
+                                description: 'Freelance importado',
+                                category: 'Trabalho',
+                                amountInCents: 150000,
+                                isPossibleDuplicate: false,
+                            },
+                        ],
+                        rejectedRows: [],
+                        canConfirm: true,
+                    }),
+                })
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions/import' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        insertedCount: 1,
+                        skippedDuplicateCount: 0,
+                        transactions: [importedTransaction],
+                    }),
+                })
+            }
+
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
+
+        vi.stubGlobal('fetch', fetchMock)
+
+        render(<App />)
+
+        await screen.findByText(
+            'Nenhuma transação encontrada para o período selecionado.',
+        )
+
+        expect(transactionsGetCount).toBe(1)
+
+        fireEvent.change(
+            screen.getByLabelText('Arquivo CSV'),
+            { target: { files: [csvFile] } },
+        )
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Analisar arquivo',
+            }),
+        )
+
+        await screen.findByText('Ver linhas válidas')
+
+        const confirmButton = screen.getByRole('button', {
+            name: 'Confirmar importação (1)',
+        })
+
+        expect(confirmButton.disabled).toBe(false)
+
+        const previewRequest = fetchMock.mock.calls.find(
+            ([url]) =>
+                url ===
+                'http://localhost:3000/transactions/import/preview',
+        )
+
+        expect(previewRequest[1].body).toBeInstanceOf(FormData)
+        expect(previewRequest[1].body.get('file')).toBe(csvFile)
+
+        fireEvent.click(confirmButton)
+
+        await screen.findByText(
+            'Importação concluída: 1 transação(ões) adicionada(s).',
+        )
+
+        const transactionList = await screen.findByRole(
+            'region',
+            { name: 'Lista de transações' },
+        )
+
+        expect(
+            within(transactionList).getByText(
+                'Freelance importado',
+            ),
+        ).toBeTruthy()
+
+        expect(transactionsGetCount).toBe(1)
+    })
+
     it('clears private filters and editing when another user signs in', async () => {
         const userB = {
             id: '51515151-5151-4515-8515-515151515151',
