@@ -6,6 +6,7 @@ import {
   createSessionToken,
   hashSessionToken,
 } from './session.js'
+import { validateTransactionInput } from './transactionValidation.js'
 
 const SESSION_DURATION_IN_MS = 7 * 24 * 60 * 60 * 1000
 const SESSION_COOKIE_NAME = 'finantec_session'
@@ -21,22 +22,6 @@ export function createApp({ database }) {
   )
 
   app.use(express.json())
-
-  function isValidDate(date) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return false
-    }
-
-    // Confirma que a data existe de fato, além de validar o formato.
-    const [year, month, day] = date.split('-').map(Number)
-    const parsedDate = new Date(Date.UTC(year, month - 1, day))
-
-    return (
-      parsedDate.getUTCFullYear() === year &&
-      parsedDate.getUTCMonth() === month - 1 &&
-      parsedDate.getUTCDate() === day
-    )
-  }
 
   function isValidUuid(value) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -188,59 +173,6 @@ export function createApp({ database }) {
   }
 
   // Cadastro e edição compartilham as mesmas regras de validação.
-  function validateTransactionInput({
-    date,
-    description,
-    category,
-    type,
-    amountInCents,
-  } = {}) {
-    const normalizedDescription =
-      typeof description === 'string' ? description.trim() : ''
-
-    const normalizedCategory =
-      typeof category === 'string' ? category.trim() : ''
-
-    if (typeof date !== 'string' || !isValidDate(date)) {
-      return {
-        error: 'Informe uma data válida.',
-      }
-    }
-
-    if (!normalizedDescription) {
-      return {
-        error: 'Informe uma descrição válida.',
-      }
-    }
-
-    if (!normalizedCategory) {
-      return {
-        error: 'Informe uma categoria válida.',
-      }
-    }
-
-    if (!['income', 'expense'].includes(type)) {
-      return {
-        error: 'Informe um tipo válido.',
-      }
-    }
-
-    if (!Number.isSafeInteger(amountInCents) || amountInCents <= 0) {
-      return {
-        error: 'Informe um valor positivo dentro do limite permitido.',
-      }
-    }
-
-    return {
-      transaction: {
-        date,
-        description: normalizedDescription,
-        category: normalizedCategory,
-        type,
-        amountInCents,
-      },
-    }
-  }
 
   app.get('/health', (request, response) => {
     return response.json({
