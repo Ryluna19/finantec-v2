@@ -4,24 +4,61 @@
   font-weight: 400;
   color-scheme: dark;
 
-  /* Base do tema escuro da V1. */
-  --bg-main: #111111;
-  --bg-sidebar: #161616;
-  --bg-panel: #1c1c1e;
+  /* Identidade visual efetiva da V1. */
+  --background: #070708;
+  --surface-1: #0c0c0e;
+  --surface-2: #101012;
+  --surface-3: #131315;
+  --surface-hover: #171719;
 
-  --text-main: #f0f0f0;
-  --text-muted: #888888;
 
-  --border: rgba(255, 255, 255, 0.07);
+  --text-primary: #f0f0f0;
+  --text-secondary: #cfcfd4;
+  --text-muted: #9898a0;
+
+  --border: rgba(255, 255, 255, 0.09);
+  --control-border: #35353a;
+  --control-border-strong: #4a4a50;
 
   --accent: #e06c1a;
+  --accent-text: #e06c1a;
   --accent-hover: #ef7d2e;
+  --accent-active: #c45810;
   --accent-soft: rgba(224, 108, 26, 0.11);
+  --accent-glow: rgba(224, 108, 26, 0.045);
+
   --success: #4ade80;
   --danger: #f87171;
 
-  color: var(--text-main);
-  background-color: var(--bg-main);
+  --bg-main: var(--background);
+  --bg-sidebar: #0a0a0b;
+  --bg-panel: var(--surface-1);
+  --bg-control: var(--surface-3);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Mantemos os radius menores atuais por enquanto. */
+  --radius-small: 2px;
+  --radius-control: 4px;
+  --radius-panel: 2px;
+
+  /* Variáveis já usadas pelo App.css e que estavam ausentes. */
+  --font-page-title: 1.75rem;
+  --font-section-title: 1.125rem;
+  --font-label: 0.875rem;
+  --font-kpi-hero: 2.75rem;
+  --font-kpi-support: 1.5rem;
+
+  /* A V1 separa superfícies principalmente por tom/borda/brilho interno. */
+  --shadow-panel: none;
+
+  color: var(--text-primary);
+  background-color: var(--background);
 }
 
 * {
@@ -30,6 +67,8 @@
 
 body {
   margin: 0;
+  color: var(--text-primary);
+  background-color: var(--background);
 }
 
 #root {

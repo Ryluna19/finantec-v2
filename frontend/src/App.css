@@ -2,6 +2,13 @@
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   min-height: 100dvh;
+  background:
+    radial-gradient(
+      circle at top center,
+      var(--accent-glow),
+      transparent 34rem
+    ),
+    var(--bg-main);
 }
 
 .sidebar {
@@ -21,43 +28,58 @@
 .nav-link {
   display: block;
   padding: 12px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   text-decoration: none;
 }
 
 .nav-link[aria-current='page'] {
-  background-color: var(--accent-soft);
-  color: var(--accent);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(240, 122, 26, 0.12) 0%,
+      rgba(240, 122, 26, 0.08) 100%
+    );
+  color: var(--accent-text);
   font-weight: 600;
+  border: 1px solid rgba(240, 122, 26, 0.12);
 }
 
 .main-content {
+  width: 100%;
+  max-width: 1440px;
   min-width: 0;
+  margin: 0 auto;
   padding: 32px;
 }
 
 .page-header {
-  margin-bottom: 28px;
+  max-width: 760px;
+  margin-bottom: 16px;
 }
 
 .page-header h1 {
-  font-size: 1.75rem;
+  font-size: var(--font-page-title);
+  line-height: 1.2;
 }
 
 .page-header p {
-  margin-top: 8px;
-  color: var(--text-muted);
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
 }
 
 .panel {
   padding: 24px;
-  background-color: var(--bg-panel);
+  background-color: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
+  box-shadow: none;
 }
 
 .panel h2 {
-  font-size: 1.125rem;
+  font-size: var(--font-section-title);
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .empty-state {
@@ -85,6 +107,7 @@
     padding: 20px 16px;
   }
 }
+
 .sidebar-header {
   display: flex;
   align-items: center;
@@ -104,10 +127,10 @@
   width: 44px;
   height: 44px;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-control);
   background: transparent;
-  color: var(--text-main);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -186,7 +209,7 @@
   padding-bottom: 16px;
   color: var(--text-muted);
   text-align: left;
-  font-size: 0.875rem;
+  font-size: var(--font-label);
 }
 
 .transaction-table th,
@@ -197,7 +220,7 @@
 
 .transaction-table th {
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: var(--font-label);
   font-weight: 600;
 }
 
@@ -226,7 +249,7 @@
 .prototype-notice {
   margin-top: 8px;
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: var(--font-label);
 }
 
 .transaction-form {
@@ -242,20 +265,28 @@
   gap: 8px;
 }
 
+.form-field label {
+  color: var(--text-secondary);
+  font-size: var(--font-label);
+  font-weight: 500;
+}
+
 .form-field input,
 .form-field select {
   width: 100%;
   min-width: 0;
   min-height: 44px;
   padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background-color: var(--bg-main);
-  color: var(--text-main);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-control);
+  background-color: var(--surface-3);
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .form-field small {
   color: var(--text-muted);
+  font-size: var(--font-label);
 }
 
 .form-error {
@@ -269,14 +300,14 @@
   min-height: 44px;
   padding: 10px 18px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background-color: var(--accent);
   color: #111111;
   font-weight: 600;
   cursor: pointer;
 }
 
-.submit-button:hover {
+.submit-button:hover:not(:disabled) {
   background-color: var(--accent-hover);
 }
 
@@ -293,10 +324,10 @@
   min-width: 0;
   min-height: 44px;
   padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background-color: var(--bg-main);
-  color: var(--text-main);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-control);
+  background-color: var(--surface-3);
+  color: var(--text-primary);
 }
 
 .transaction-search-filter {
@@ -317,12 +348,12 @@
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background-color: var(--bg-main);
+  background-color: var(--surface-2);
 }
 
 .summary-label {
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: var(--font-label);
 }
 
 .summary-card strong {
@@ -335,19 +366,19 @@
   }
 
   .transaction-filters {
-  grid-template-columns: 1fr;
-}
+    grid-template-columns: 1fr;
+  }
 
   .transaction-summary {
-  grid-template-columns: 1fr;
-}
+    grid-template-columns: 1fr;
+  }
 }
 
 .nav-button {
   width: 100%;
   border: 0;
   background: transparent;
-  color: var(--text-main);
+  color: var(--text-primary);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -361,11 +392,26 @@
   margin-top: 24px;
 }
 
+.overview-period-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-inline: 2px;
+}
+
+.overview-period-bar h2 {
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: var(--font-label);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .overview-period-filters {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 20px;
+  grid-template-columns: 136px 210px;
+  gap: 12px;
 }
 
 .overview-period-filters select {
@@ -373,28 +419,704 @@
   min-width: 0;
   min-height: 44px;
   padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background-color: var(--bg-main);
-  color: var(--text-main);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-control);
+  background-color: var(--surface-3);
+  color: var(--text-primary);
 }
 
-.overview-summary {
+.overview-financial-panel {
+  padding: 24px;
+  border-radius: 12px;
+  background-color: var(--surface-2);
+}
+
+.overview-financial-content {
+  margin-top: 24px;
+}
+
+.overview-balance {
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+
+.overview-balance-label {
+  display: block;
+  color: var(--text-secondary);
+  font-size: var(--font-label);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.overview-balance-value {
+  display: block;
+  margin-top: 8px;
+  font-size: clamp(
+    2.25rem,
+    4vw,
+    var(--font-kpi-hero)
+  );
+  font-weight: 700;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-support-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.overview-support-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 24px;
+  padding-right: 24px;
+}
+
+.overview-support-item + .overview-support-item {
+  padding-left: 24px;
+  border-left: 1px solid var(--border);
+}
+
+.overview-support-item strong {
+  font-size: var(--font-kpi-support);
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================
+   Refinos visuais — hierarquia da V1
+   ========================================= */
+
+/* Saldo: mantém o painel neutro e reforça apenas o valor. */
+.overview-balance-value.transaction-income {
+  text-shadow: 0 0 24px rgba(74, 222, 128, 0.12);
+}
+
+.overview-balance-value.transaction-expense {
+  text-shadow: 0 0 24px rgba(248, 113, 113, 0.12);
+}
+
+/* Importação: fluxo compacto e deliberado. */
+.transaction-import-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.transaction-import-controls .form-field {
+  min-width: 0;
+}
+
+.transaction-import-controls input[type='file'] {
+  min-height: 44px;
+  padding: 5px;
+}
+
+.transaction-import-controls input[type='file']::file-selector-button {
+  min-height: 32px;
+  margin-right: 12px;
+  padding: 4px 12px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background-color: #242426;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.transaction-import-controls input[type='file']::file-selector-button:hover {
+  border-color: var(--control-border-strong);
+  background-color: #2b2b2e;
+}
+
+.transaction-import-controls > button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background-color: #242426;
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.transaction-import-controls > button:hover:not(:disabled) {
+  border-color: var(--control-border-strong);
+  background-color: #2b2b2e;
+}
+
+.transaction-import-controls > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.transaction-import-preview {
+  margin-top: 24px;
+}
+
+.transaction-import-preview .transaction-summary {
+  grid-template-columns: repeat(
+    4,
+    minmax(0, 1fr)
+  );
+}
+
+.transaction-import-preview details {
   margin-top: 20px;
 }
 
-@media (max-width: 900px) {
-  .overview-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+.transaction-import-preview summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.transaction-import-duplicates {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 16px;
+}
+
+.transaction-import-duplicates input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.transaction-import-preview > button {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 8px;
+  background-color: var(--accent);
+  color: #111111;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.transaction-import-preview > button:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+}
+
+.transaction-import-preview > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Tabelas: recupera a hierarquia interna da V1. */
+.transaction-table-container {
+  margin-top: 20px;
+  overflow-x: auto;
+  border: 1px solid #303034;
+  border-radius: 12px;
+  background-color: var(--surface-1);
+}
+
+.transaction-table {
+  overflow: hidden;
+}
+
+.transaction-table thead {
+  background-color: var(--surface-3);
+}
+
+.transaction-table tbody tr:nth-child(odd) {
+  background-color: var(--surface-1);
+}
+
+.transaction-table tbody tr:nth-child(even) {
+  background-color: var(--surface-2);
+}
+
+.transaction-table tbody tr:hover {
+  background-color: var(--surface-hover);
+}
+
+.transaction-table th,
+.transaction-table td {
+  border-radius: 0;
+}
+
+/* Editar / Excluir continuam ações secundárias. */
+#transactions .transaction-table button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background-color: #242426;
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#transactions .transaction-table button:hover {
+  border-color: var(--control-border-strong);
+  background-color: #2b2b2e;
+}
+
+/* =========================================
+   Refinos de largura e densidade
+   ========================================= */
+
+/* Cadastro: campos não precisam ocupar o painel inteiro. */
+.transaction-form {
+  max-width: 920px;
+  grid-template-columns:
+    minmax(220px, 0.9fr)
+    minmax(300px, 1.1fr);
+}
+
+/* Filtros: mantém leitura horizontal sem esticar demais. */
+.transaction-filters {
+  max-width: 1040px;
+}
+
+/* Ano/mês da Overview continuam compactos. */
+.overview-period-filters {
+  grid-template-columns: 140px 200px;
+}
+
+/* Aproxima o contexto do título sem criar outro painel. */
+.overview-period-bar {
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* Reduz um pouco a altura visual do resumo sem perder hierarquia. */
+.overview-financial-content {
+  margin-top: 20px;
+}
+
+.overview-balance {
+  padding-bottom: 20px;
+}
+
+.overview-support-item {
+  padding-top: 18px;
+}
+
+/* Quebras da prévia de importação. */
+@media (max-width: 1000px) {
+  .transaction-import-preview .transaction-summary {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
   }
 }
 
 @media (max-width: 700px) {
-  .overview-period-filters,
-  .overview-summary {
+  .transaction-import-controls {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .transaction-import-preview .transaction-summary {
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 900px) {
+  .overview-period-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .overview-period-bar h2 {
+    margin-bottom: 0;
+  }
+  .transaction-form {
+  max-width: none;
+  grid-template-columns: 1fr;
+}
+
+.transaction-filters {
+  max-width: none;
+}
+}
+
+/* Geometria por função, preservando a linguagem da V1. */
+
+#transactions > .panel {
+  border-radius: 12px;
+}
+
+.overview-financial-panel {
+  border-radius: 12px;
+}
+
+.summary-card {
+  border-radius: 8px;
+}
+
+.form-field input,
+.form-field select,
+.transaction-filters select,
+.overview-period-filters select {
+  border-radius: 8px;
+}
+
+.submit-button,
+.sidebar-toggle,
+.nav-link {
+  border-radius: 8px;
+}
+
+@media (max-width: 700px) {
+  .overview-financial-panel {
+    padding: 20px;
+  }
+
+  .overview-support-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-support-item {
+    padding: 20px 0 0;
+  }
+
+  .overview-support-item + .overview-support-item {
+    margin-top: 20px;
+    padding-left: 0;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .overview-period-filters {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================
+   Autenticação
+   ========================================= */
+
+.auth-screen {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 32px;
+  background:
+    radial-gradient(
+      circle at top center,
+      var(--accent-glow),
+      transparent 34rem
+    ),
+    var(--bg-main);
+}
+
+.auth-shell {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.05fr)
+    minmax(0, 1fr);
+  width: min(100%, 1100px);
+  min-height: 560px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background-color: var(--surface-1);
+   box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.auth-brand-panel {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  padding: 48px;
+  background-color: var(--surface-1);
+}
+
+.auth-brand-panel::before {
+  position: absolute;
+  right: -110px;
+  bottom: -110px;
+  width: 330px;
+  height: 330px;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle,
+      var(--accent-soft),
+      transparent 68%
+    );
+  content: '';
+  pointer-events: none;
+}
+
+.auth-brand-content {
+  position: relative;
+  z-index: 1;
+  max-width: 420px;
+}
+
+.auth-eyebrow {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.auth-brand-name {
+  display: block;
+  color: var(--accent);
+  font-size: clamp(2.25rem, 5vw, 3.5rem);
+  line-height: 1;
+}
+
+.auth-brand-description {
+  max-width: 360px;
+  margin-top: 18px;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.auth-form-panel {
+  display: grid;
+  place-items: center;
+  padding: 48px;
+  border-left: 1px solid var(--border);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.018),
+      rgba(255, 255, 255, 0) 90px
+    ),
+    #1c1c1e;
+}
+
+.auth-form-content {
+  width: min(100%, 440px);
+}
+
+.auth-heading {
+  margin-bottom: 28px;
+}
+
+.auth-heading h1 {
+  font-size: var(--font-page-title);
+  line-height: 1.2;
+}
+
+.auth-heading p {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.auth-form {
+  display: grid;
+  gap: 18px;
+}
+
+.auth-form .form-field {
+  width: 100%;
+}
+
+.auth-form .form-field input {
+  min-height: 48px;
+  border-radius: 8px;
+}
+
+.auth-error {
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.auth-primary-action {
+  width: 100%;
+  min-height: 48px;
+  justify-self: stretch;
+  border-radius: 8px;
+}
+
+.auth-secondary-action {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background-color: #242426;
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-secondary-action:hover:not(:disabled) {
+  border-color: var(--control-border-strong);
+  background-color: #2b2b2e;
+}
+
+.auth-primary-action:disabled,
+.auth-secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 850px) {
+  .auth-screen {
+    padding: 20px;
+  }
+
+  .auth-shell {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .auth-brand-panel {
+    min-height: 220px;
+    align-items: center;
+    padding: 32px;
+  }
+
+  .auth-brand-name {
+    font-size: 2.5rem;
+  }
+
+  .auth-form-panel {
+    padding: 36px 32px;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .auth-screen {
+    padding: 0;
+  }
+
+  .auth-shell {
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .auth-brand-panel {
+    min-height: 170px;
+    padding: 24px;
+  }
+
+  .auth-brand-description {
+    margin-top: 12px;
+  }
+
+  .auth-form-panel {
+    align-items: start;
+    padding: 32px 24px;
+  }
+}
+
+/* Highlight sutil das superfícies escuras. */
+.panel,
+.overview-financial-panel,
+.summary-card,
+.transaction-table-container,
+.auth-shell {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+/* Estados interativos dos controles. */
+.form-field input:hover,
+.form-field select:hover,
+.transaction-filters select:hover,
+.overview-period-filters select:hover {
+  border-color: var(--control-border-strong);
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.transaction-filters select:focus,
+.overview-period-filters select:focus {
+  border-color: rgba(224, 108, 26, 0.65);
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(224, 108, 26, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+.submit-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.form-field input:disabled,
+.form-field select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  border-color: var(--control-border);
+}
+
+#transactions .transaction-table button + button {
+  margin-inline-start: 8px;
+}
+
+#transactions
+  .transaction-table
+  button.transaction-delete-action {
+  color: var(--danger);
+}
+
+#transactions
+  .transaction-table
+  button.transaction-delete-action:hover:not(:disabled) {
+  border-color: var(--danger);
+}
+
+.transaction-form > button[type='button'] {
+  justify-self: start;
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background-color: var(--surface-3);
+  color: var(--text-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.transaction-form > button[type='button']:hover:not(:disabled) {
+  border-color: var(--control-border-strong);
+  background-color: var(--surface-hover);
+}
+
+.transaction-form > button[type='button']:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.transaction-import-preview
+  .import-count-valid {
+  color: var(--success);
+}
+
+.transaction-import-preview
+  .import-count-rejected {
+  color: var(--danger);
+}
+
+.transaction-import-preview
+  .import-count-duplicate {
+  color: var(--accent);
+}
+
+.transaction-import-preview
+  .import-status-duplicate {
+  color: var(--accent);
+}
+

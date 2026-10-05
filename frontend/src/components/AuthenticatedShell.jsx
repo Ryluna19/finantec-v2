@@ -2,6 +2,7 @@ import { useState } from 'react'
 import OverviewPage from './OverviewPage'
 import TransactionsPage from './TransactionsPage'
 import useTransactions from '../hooks/useTransactions'
+import finantecMark from '../assets/branding/finantec-header-mark.svg'
 
 function AuthenticatedShell({
   captureAuthGeneration,
@@ -12,7 +13,7 @@ function AuthenticatedShell({
   const [isSidebarCollapsed, setIsSidebarCollapsed] =
     useState(false)
 
-  /*
+  /**
    * Mantemos Transações como inicial somente durante
    * esta etapa para preservar a suíte existente.
    * A Visão Geral será a tela inicial no próximo incremento.
@@ -29,11 +30,11 @@ function AuthenticatedShell({
     deleteTransaction,
     previewTransactionImport,
     importTransactions,
-    } = useTransactions({
+  } = useTransactions({
     captureAuthGeneration,
     isCurrentAuthGeneration,
     expireSession,
-    })
+  })
 
   return (
     <div
@@ -57,7 +58,12 @@ function AuthenticatedShell({
               className="brand-short"
               aria-hidden="true"
             >
-              FT
+              <img
+                src={finantecMark}
+                alt=""
+                width="32"
+                height="32"
+              />
             </span>
           </span>
 
@@ -74,14 +80,35 @@ function AuthenticatedShell({
                 ? 'Expandir menu'
                 : 'Recolher menu'
             }
-            aria-expanded={
-              !isSidebarCollapsed
-            }
+            aria-expanded={!isSidebarCollapsed}
             aria-controls="sidebar-navigation"
           >
-            <span aria-hidden="true">
-              ☰
-            </span>
+            <svg
+              className="nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d={
+                  isSidebarCollapsed
+                    ? 'M6 7l5 5-5 5'
+                    : 'M18 7l-5 5 5 5'
+                }
+              />
+
+              <path
+                d={
+                  isSidebarCollapsed
+                    ? 'M13 7l5 5-5 5'
+                    : 'M11 7l-5 5 5 5'
+                }
+              />
+            </svg>
           </button>
         </div>
 
@@ -212,23 +239,23 @@ function AuthenticatedShell({
           }
         />
       ) : (
-       <TransactionsPage
-        transactions={transactions}
-        isLoadingTransactions={
+        <TransactionsPage
+          transactions={transactions}
+          isLoadingTransactions={
             isLoadingTransactions
-        }
-        transactionsLoadError={
+          }
+          transactionsLoadError={
             transactionsLoadError
-        }
-        addTransaction={addTransaction}
-        updateTransaction={updateTransaction}
-        deleteTransaction={deleteTransaction}
-        previewTransactionImport={
+          }
+          addTransaction={addTransaction}
+          updateTransaction={updateTransaction}
+          deleteTransaction={deleteTransaction}
+          previewTransactionImport={
             previewTransactionImport
-        }
-        importTransactions={
+          }
+          importTransactions={
             importTransactions
-        }
+          }
         />
       )}
     </div>

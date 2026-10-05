@@ -98,7 +98,7 @@ function OverviewPage({
       </header>
 
       <section
-        className="panel"
+        className="overview-period-bar"
         aria-labelledby="overview-period-title"
       >
         <h2 id="overview-period-title">
@@ -200,55 +200,59 @@ function OverviewPage({
           </div>
         ) : (
           <div
-            className="overview-summary"
+            className="overview-financial-content"
             aria-label="Resumo financeiro do período"
           >
-            <div className="summary-card">
-              <span className="summary-label">
+            <div className="overview-balance">
+              <span className="overview-balance-label">
                 Saldo do período
               </span>
 
-              <strong className={balanceClass}>
+              <strong
+                className={`overview-balance-value ${balanceClass}`}
+              >
                 {formatCurrency(
                   overview.balanceInCents,
                 )}
               </strong>
             </div>
 
-            <div className="summary-card">
-              <span className="summary-label">
-                Receitas
-              </span>
+            <div className="overview-support-grid">
+              <div className="overview-support-item">
+                <span className="summary-label">
+                  Receitas
+                </span>
 
-              <strong className="transaction-income">
-                {formatCurrency(
-                  overview.incomeInCents,
-                )}
-              </strong>
-            </div>
+                <strong className="transaction-income">
+                  {formatCurrency(
+                    overview.incomeInCents,
+                  )}
+                </strong>
+              </div>
 
-            <div className="summary-card">
-              <span className="summary-label">
-                Consumo
-              </span>
+              <div className="overview-support-item">
+                <span className="summary-label">
+                  Consumo
+                </span>
 
-              <strong className="transaction-expense">
-                {formatCurrency(
-                  overview.consumptionInCents,
-                )}
-              </strong>
-            </div>
+                <strong className="transaction-expense">
+                  {formatCurrency(
+                    overview.consumptionInCents,
+                  )}
+                </strong>
+              </div>
 
-            <div className="summary-card">
-              <span className="summary-label">
-                Reserva
-              </span>
+              <div className="overview-support-item">
+                <span className="summary-label">
+                  Reserva
+                </span>
 
-              <strong>
-                {formatCurrency(
-                  overview.reserveInCents,
-                )}
-              </strong>
+                <strong>
+                  {formatCurrency(
+                    overview.reserveInCents,
+                  )}
+                </strong>
+              </div>
             </div>
           </div>
         )}

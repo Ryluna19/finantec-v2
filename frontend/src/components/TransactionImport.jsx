@@ -219,7 +219,7 @@ function TransactionImport({
                 Válidas
               </span>
 
-              <strong>
+              <strong className="import-count-valid">
                 {preview.validCount}
               </strong>
             </div>
@@ -229,7 +229,7 @@ function TransactionImport({
                 Com erro
               </span>
 
-              <strong>
+              <strong className="import-count-rejected">
                 {preview.rejectedCount}
               </strong>
             </div>
@@ -239,7 +239,7 @@ function TransactionImport({
                 Possíveis duplicatas
               </span>
 
-              <strong>
+              <strong className="import-count-duplicate">
                 {
                   preview.possibleDuplicateCount
                 }
@@ -313,9 +313,13 @@ function TransactionImport({
                           </td>
 
                           <td>
-                            {transaction.isPossibleDuplicate
-                              ? 'Possível duplicata'
-                              : 'Nova'}
+                            {transaction.isPossibleDuplicate ? (
+                                <span className="import-status-duplicate">
+                                Possível duplicata
+                                </span>
+                            ) : (
+                                'Nova'
+                            )}
                           </td>
                         </tr>
                       ))}

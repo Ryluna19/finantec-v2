@@ -82,6 +82,7 @@ function TransactionList({
                   Editar
                 </button>
                 <button
+                  className="transaction-delete-action"
                   type="button"
                   onClick={() => handleDelete(transaction)}
                   aria-label={`Excluir ${transaction.description}`}

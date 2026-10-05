@@ -50,13 +50,13 @@ function App() {
   }
 
   if (authStatus === 'unauthenticated') {
-    return (
-      <div className="empty-state">
+  return (
+      <main className="auth-screen">
         <AuthForm
           onLogin={handleLogin}
           onRegister={handleRegister}
         />
-      </div>
+      </main>
     )
   }
 
