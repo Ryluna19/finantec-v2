@@ -1228,6 +1228,22 @@
   background-color: var(--danger);
 }
 
+.overview-primary-panels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.overview-primary-panels > .panel {
+  flex: 1 1 660px;
+  min-width: 0;
+}
+
+.overview-primary-panels > .panel + .panel {
+  margin-top: 0;
+}
+
 .overview-categories-panel {
   margin-top: 24px;
 }

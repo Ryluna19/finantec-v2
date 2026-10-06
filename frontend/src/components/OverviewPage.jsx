@@ -237,10 +237,11 @@ function OverviewPage({
         </div>
       </section>
 
-      <section
-        className="panel overview-financial-panel"
-        aria-labelledby="overview-summary-title"
-      >
+       <div className="overview-primary-panels">
+        <section
+          className="panel overview-financial-panel"
+          aria-labelledby="overview-summary-title"
+        >
         <h2 id="overview-summary-title">
           Resumo financeiro
         </h2>
@@ -483,8 +484,9 @@ function OverviewPage({
                 },
               )}
             </ol>
-          </section>
+         </section>
         )}
+      </div>
 
       {!isLoadingTransactions &&
         !transactionsLoadError &&
