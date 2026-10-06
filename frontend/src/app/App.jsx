@@ -1,7 +1,7 @@
-import AuthForm from './components/AuthForm'
-import AuthenticatedShell from './components/AuthenticatedShell'
-import useAuth from './hooks/useAuth'
-import './App.css'
+import AuthForm from '../features/auth/AuthForm'
+import AuthenticatedShell from './AuthenticatedShell'
+import useAuth from '../features/auth/useAuth'
+import '../App.css'
 
 function App() {
   const {

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import OverviewPage from './OverviewPage'
-import TransactionsPage from './TransactionsPage'
-import useTransactions from '../hooks/useTransactions'
+import OverviewPage from '../features/overview/OverviewPage'
+import TransactionsPage from '../features/transactions/TransactionsPage'
+import useTransactions from '../features/transactions/useTransactions'
 import finantecMark from '../assets/branding/finantec-header-mark.svg'
 
 function AuthenticatedShell({

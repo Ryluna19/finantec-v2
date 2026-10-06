@@ -8,7 +8,7 @@ import {
     waitFor,
     within,
 } from '@testing-library/react'
-import App from './App'
+import App from '../src/app/App'
 
 const AUTHENTICATED_USER = {
     id: '6b959525-67fc-453c-b4b2-956058724f22',

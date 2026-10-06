@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateFinancialOverview } from './financialOverview'
+import { calculateFinancialOverview } from '../src/features/overview/financialOverview'
 
 describe('calculateFinancialOverview', () => {
   it('separates consumption, reserve and available balance', () => {

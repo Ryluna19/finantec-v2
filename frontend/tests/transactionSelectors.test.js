@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterTransactionsByPeriod } from './transactionSelectors'
+import { filterTransactionsByPeriod } from '../src/features/transactions/transactionSelectors'
 
 describe('filterTransactionsByPeriod', () => {
   const transactions = [

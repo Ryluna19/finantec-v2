@@ -4,8 +4,8 @@ import TransactionFilters from './TransactionFilters'
 import TransactionImport from './TransactionImport'
 import TransactionList from './TransactionList'
 import TransactionSummary from './TransactionSummary'
-import useTransactionFilters from '../hooks/useTransactionFilters'
-import { filterTransactionsByPeriod } from '../transactionSelectors'
+import useTransactionFilters from './useTransactionFilters'
+import { filterTransactionsByPeriod } from './transactionSelectors'
 
 function TransactionsPage({
   transactions,

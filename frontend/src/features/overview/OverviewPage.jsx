@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { calculateFinancialOverview } from '../financialOverview'
-import { filterTransactionsByPeriod } from '../transactionSelectors'
+import { calculateFinancialOverview } from './financialOverview'
+import { filterTransactionsByPeriod } from '../transactions/transactionSelectors'
 
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',

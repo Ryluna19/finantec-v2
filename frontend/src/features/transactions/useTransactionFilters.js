@@ -3,7 +3,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { filterTransactionsByPeriod } from '../transactionSelectors'
+import { filterTransactionsByPeriod } from './transactionSelectors'
 
 function useTransactionFilters({
   currentYear,
