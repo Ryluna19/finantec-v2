@@ -70,6 +70,14 @@ function createAuthenticatedSessionResponse() {
     })
 }
 
+async function openTransactions() {
+    fireEvent.click(
+        await screen.findByRole('button', {
+            name: 'Transações',
+        }),
+    )
+}
+
 describe('App transactions', () => {
 
     it('does not load transactions when there is no authenticated session', async () => {
@@ -190,7 +198,7 @@ describe('App transactions', () => {
         )
 
         await screen.findByText(
-            'Nenhuma transação encontrada para o período selecionado.',
+            'Não há transações registradas para o período selecionado.',
         )
 
         const loginCall = fetchMock.mock.calls.find(
@@ -301,7 +309,7 @@ describe('App transactions', () => {
         )
 
         await screen.findByText(
-            'Nenhuma transação encontrada para o período selecionado.',
+            'Não há transações registradas para o período selecionado.',
         )
 
         const registerCall = fetchMock.mock.calls.find(
@@ -381,6 +389,7 @@ describe('App transactions', () => {
         vi.stubGlobal('fetch', fetchMock)
 
         render(<App />)
+        await openTransactions()
 
         const dateInput = await screen.findByLabelText('Data')
 
@@ -467,6 +476,7 @@ describe('App transactions', () => {
         vi.spyOn(console, 'error').mockImplementation(() => { })
 
         render(<App />)
+        await openTransactions()
 
         await screen.findByText('Carregando transações...')
 
@@ -540,6 +550,7 @@ describe('App transactions', () => {
         vi.stubGlobal('fetch', fetchMock)
 
         render(<App />)
+        await openTransactions()
 
         await screen.findByText(
             'Nenhuma transação encontrada para o período selecionado.',
@@ -702,6 +713,7 @@ describe('App transactions', () => {
         vi.stubGlobal('fetch', fetchMock)
 
         render(<App />)
+        await openTransactions()
 
         const dateInput = await screen.findByLabelText('Data')
 
@@ -751,6 +763,8 @@ describe('App transactions', () => {
                 name: 'Entrar',
             }),
         )
+
+        await openTransactions()
 
         await screen.findByText('Transação da conta B')
 
@@ -866,6 +880,7 @@ describe('App transactions', () => {
         vi.stubGlobal('fetch', fetchMock)
 
         render(<App />)
+        await openTransactions()
 
         const dateInput = await screen.findByLabelText('Data')
 
@@ -927,6 +942,8 @@ describe('App transactions', () => {
                 name: 'Entrar',
             }),
         )
+
+        await openTransactions()
 
         await screen.findByText('Dados da conta B')
 
@@ -1033,6 +1050,7 @@ describe('App transactions', () => {
         vi.stubGlobal('fetch', fetchMock)
 
         render(<App />)
+        await openTransactions()
 
         const dateInput = await screen.findByLabelText('Data')
 
@@ -1095,6 +1113,8 @@ describe('App transactions', () => {
                 name: 'Entrar',
             }),
         )
+
+        await openTransactions()
 
         await screen.findByText(
             'Conta B continua autenticada',
@@ -1300,6 +1320,7 @@ describe('App transactions', () => {
         vi.stubGlobal('fetch', fetchMock)
 
         render(<App />)
+        await openTransactions()
 
         await screen.findByText('Sessão restaurada')
 
@@ -1315,6 +1336,8 @@ describe('App transactions', () => {
             ok: false,
             status: 500,
         })
+
+        await openTransactions()
 
         await screen.findByText('Sessão restaurada')
 
@@ -1413,6 +1436,7 @@ describe('App transactions', () => {
         vi.stubGlobal('fetch', fetchMock)
 
         render(<App />)
+        await openTransactions()
 
         await screen.findByText('Transação atual')
 
@@ -1566,6 +1590,7 @@ describe('App transactions', () => {
         vi.spyOn(window, 'confirm').mockReturnValue(true)
 
         render(<App />)
+        await openTransactions()
 
         await screen.findByText('Mercado')
 
@@ -1743,6 +1768,7 @@ describe('App transactions', () => {
             .mockImplementation(() => { })
 
         render(<App />)
+        await openTransactions()
 
         await screen.findByText('Excluir da conta A')
 
@@ -1791,6 +1817,8 @@ describe('App transactions', () => {
                 name: 'Entrar',
             }),
         )
+
+        await openTransactions()
 
         await screen.findByText(
             'Transação preservada da conta B',
@@ -1903,19 +1931,15 @@ describe('App transactions', () => {
 
         render(<App />)
 
-        await screen.findByText('Salário')
-
-        expect(transactionsGetCount).toBe(1)
-
-        fireEvent.click(
-            screen.getByRole('button', {
-                name: 'Visão geral',
-            }),
-        )
-
         await screen.findByRole('heading', {
             name: 'Visão geral',
         })
+
+        await screen.findByLabelText(
+            'Resumo financeiro do período',
+        )
+
+        expect(transactionsGetCount).toBe(1)
 
         const summary = screen.getByLabelText(
             'Resumo financeiro do período',
@@ -1956,7 +1980,7 @@ describe('App transactions', () => {
         expect(transactionsGetCount).toBe(1)
     })
 
-        it('imports a CSV into Movimentações without a second transactions GET', async () => {
+    it('imports a CSV into Movimentações without a second transactions GET', async () => {
         const today = new Date()
         const transactionDate = [
             today.getFullYear(),
@@ -2058,6 +2082,7 @@ describe('App transactions', () => {
         vi.stubGlobal('fetch', fetchMock)
 
         render(<App />)
+        await openTransactions()
 
         await screen.findByText(
             'Nenhuma transação encontrada para o período selecionado.',
@@ -2210,6 +2235,7 @@ describe('App transactions', () => {
         vi.stubGlobal('fetch', fetchMock)
 
         render(<App />)
+        await openTransactions()
 
         const yearFilter = await screen.findByLabelText('Ano')
 
@@ -2304,6 +2330,8 @@ describe('App transactions', () => {
                 name: 'Entrar',
             }),
         )
+
+        await openTransactions()
 
         await screen.findByText('Receita da conta B')
 

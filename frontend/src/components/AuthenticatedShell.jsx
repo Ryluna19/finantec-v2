@@ -13,13 +13,8 @@ function AuthenticatedShell({
   const [isSidebarCollapsed, setIsSidebarCollapsed] =
     useState(false)
 
-  /**
-   * Mantemos Transações como inicial somente durante
-   * esta etapa para preservar a suíte existente.
-   * A Visão Geral será a tela inicial no próximo incremento.
-   */
   const [activeView, setActiveView] =
-    useState('transactions')
+   useState('overview')
 
   const {
     transactions,
