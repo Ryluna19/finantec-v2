@@ -1255,13 +1255,21 @@
 }
 
 .overview-category-list {
-  display: grid;
-  gap: 18px;
+  column-count: 2;
+  column-width: 400px;
+  column-gap: 24px;
+  column-fill: balance;
   margin-top: 24px;
 }
 
 .overview-category-item {
   min-width: 0;
+  break-inside: avoid;
+  margin-bottom: 18px;
+}
+
+.overview-category-item:last-child {
+  margin-bottom: 0;
 }
 
 .overview-category-header {
