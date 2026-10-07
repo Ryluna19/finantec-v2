@@ -9,6 +9,15 @@ import {
     within,
 } from '@testing-library/react'
 import App from '../src/app/App'
+import { downloadTransactionsCsv } from '../src/features/transactions/transactionExport'
+
+
+vi.mock(
+    '../src/features/transactions/transactionExport',
+    () => ({
+        downloadTransactionsCsv: vi.fn(),
+    }),
+)
 
 const AUTHENTICATED_USER = {
     id: '6b959525-67fc-453c-b4b2-956058724f22',
@@ -2375,6 +2384,133 @@ describe('App transactions', () => {
         ).toBeNull()
 
         expect(transactionsGetCount).toBe(2)
+    })
+    it('exports the whole selected period despite additional filters without another transactions GET', async () => {
+        downloadTransactionsCsv.mockClear()
+
+        const today = new Date()
+        const currentYear = today.getFullYear()
+        const currentMonth = String(
+            today.getMonth() + 1,
+        ).padStart(2, '0')
+
+        const transactions = [
+            {
+                id: '11111111-1111-4111-8111-111111111111',
+                date: `${currentYear}-${currentMonth}-05`,
+                description: 'Salário do período',
+                category: 'Trabalho',
+                type: 'income',
+                amountInCents: 500000,
+            },
+            {
+                id: '22222222-2222-4222-8222-222222222222',
+                date: `${currentYear}-${currentMonth}-10`,
+                description: 'Mercado do período',
+                category: 'Alimentação',
+                type: 'expense',
+                amountInCents: 25000,
+            },
+            {
+                id: '33333333-3333-4333-8333-333333333333',
+                date: `${currentYear - 1}-06-15`,
+                description: 'Fora do período',
+                category: 'Teste',
+                type: 'income',
+                amountInCents: 900000,
+            },
+        ]
+
+        let transactionsGetCount = 0
+
+        const fetchMock = vi.fn((url, options = {}) => {
+            if (
+                url === 'http://localhost:3000/auth/me' &&
+                !options.method
+            ) {
+                return createAuthenticatedSessionResponse()
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions' &&
+                !options.method
+            ) {
+                transactionsGetCount += 1
+
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => transactions,
+                })
+            }
+
+            throw new Error(
+                `Unexpected fetch: ${options.method ?? 'GET'} ${url}`,
+            )
+        })
+
+        vi.stubGlobal('fetch', fetchMock)
+
+        render(<App />)
+        await openTransactions()
+
+        await screen.findByText('Salário do período')
+        await screen.findByText('Mercado do período')
+
+        expect(transactionsGetCount).toBe(1)
+
+        fireEvent.change(
+            screen.getByLabelText('Tipo', {
+                selector: '#transaction-type-filter',
+            }),
+            {
+                target: { value: 'expense' },
+            },
+        )
+
+        expect(
+            screen.queryByText('Salário do período'),
+        ).toBeNull()
+
+        expect(
+            screen.getByText('Mercado do período'),
+        ).toBeTruthy()
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Exportar período atual',
+            }),
+        )
+
+        expect(
+            downloadTransactionsCsv,
+        ).toHaveBeenCalledTimes(1)
+
+        const exportedTransactions =
+            downloadTransactionsCsv.mock.calls[0][0]
+
+        expect(exportedTransactions).toHaveLength(2)
+
+        expect(
+            exportedTransactions.map(
+                (transaction) => transaction.description,
+            ),
+        ).toEqual(
+            expect.arrayContaining([
+                'Salário do período',
+                'Mercado do período',
+            ]),
+        )
+
+        expect(
+            exportedTransactions.some(
+                (transaction) =>
+                    transaction.description ===
+                    'Fora do período',
+            ),
+        ).toBe(false)
+
+        expect(transactionsGetCount).toBe(1)
     })
 })
 

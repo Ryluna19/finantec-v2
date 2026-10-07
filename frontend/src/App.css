@@ -1301,3 +1301,33 @@
   height: 100%;
   background-color: var(--accent);
 }
+
+.transactions-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.transaction-export-action {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background-color: #242426;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.transaction-export-action:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.transaction-export-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

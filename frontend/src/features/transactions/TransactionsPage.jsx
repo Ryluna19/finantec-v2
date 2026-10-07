@@ -6,6 +6,7 @@ import TransactionList from './TransactionList'
 import TransactionSummary from './TransactionSummary'
 import useTransactionFilters from './useTransactionFilters'
 import { filterTransactionsByPeriod } from './transactionSelectors'
+import { downloadTransactionsCsv } from './transactionExport'
 
 function TransactionsPage({
   transactions,
@@ -169,6 +170,12 @@ function TransactionsPage({
     )
   }
 
+  function handleExportTransactions() {
+    downloadTransactionsCsv(
+      periodTransactions,
+    )
+  }
+
   const emptyTransactionMessage =
     periodTransactions.length === 0
       ? 'Nenhuma transação encontrada para o período selecionado.'
@@ -228,9 +235,31 @@ function TransactionsPage({
         className="panel"
         aria-labelledby="transactions-title"
       >
-        <h2 id="transactions-title">
-          Movimentações
-        </h2>
+        <div className="transactions-panel-header">
+  <div>
+           <h2 id="transactions-title">
+              Movimentações
+            </h2>
+
+            <p className="prototype-notice">
+              A exportação considera todo o período selecionado,
+              independentemente dos filtros adicionais.
+            </p>
+          </div>
+
+          <button
+            className="transaction-export-action"
+            type="button"
+            onClick={handleExportTransactions}
+            disabled={
+              isLoadingTransactions ||
+              Boolean(transactionsLoadError) ||
+              periodTransactions.length === 0
+            }
+          >
+            Exportar período atual
+          </button>
+        </div>
 
         {isLoadingTransactions ? (
           <div
