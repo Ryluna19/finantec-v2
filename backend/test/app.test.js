@@ -621,6 +621,274 @@ test('POST /auth/logout succeeds without a session cookie', async () => {
   assert.match(cookies[0], /^finantec_session=/)
 })
 
+test('budget routes require authentication', async () => {
+  const database = createFakeDatabase(async () => {
+    throw new Error(
+      'Database should not be called',
+    )
+  })
+
+  const app = createApp({
+    database,
+  })
+
+  const routes = [
+    ['get', '/budgets'],
+    ['post', '/budgets'],
+  ]
+
+  for (const [method, path] of routes) {
+    const response =
+      await request(app)[method](path)
+
+    assert.equal(response.status, 401)
+
+    assert.deepEqual(response.body, {
+      error:
+        'Sessão inválida ou expirada.',
+    })
+  }
+})
+
+test('GET /budgets returns only the authenticated user budgets using the API format', async () => {
+  let receivedSql
+  let receivedParams
+
+  const database =
+    createAuthenticatedDatabase(
+      async (sql, params) => {
+        receivedSql = sql
+        receivedParams = params
+
+        return {
+          rowCount: 2,
+          rows: [
+            {
+              id: '11111111-1111-4111-8111-111111111111',
+              start_period: '2026-04',
+              end_period: null,
+              category: 'Alimentação',
+              planned_amount_in_cents:
+                '150000',
+            },
+            {
+              id: '22222222-2222-4222-8222-222222222222',
+              start_period: '2026-01',
+              end_period: '2026-03',
+              category: 'Casa',
+              planned_amount_in_cents:
+                '80000',
+            },
+          ],
+        }
+      },
+    )
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .get('/budgets')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+
+  assert.equal(response.status, 200)
+
+  assert.deepEqual(response.body, [
+    {
+      id: '11111111-1111-4111-8111-111111111111',
+      startPeriod: '2026-04',
+      endPeriod: null,
+      category: 'Alimentação',
+      plannedAmountInCents: 150000,
+    },
+    {
+      id: '22222222-2222-4222-8222-222222222222',
+      startPeriod: '2026-01',
+      endPeriod: '2026-03',
+      category: 'Casa',
+      plannedAmountInCents: 80000,
+    },
+  ])
+
+  assert.match(
+    receivedSql,
+    /FROM budgets/,
+  )
+
+  assert.match(
+    receivedSql,
+    /WHERE user_id = \$1/,
+  )
+
+  assert.deepEqual(receivedParams, [
+    AUTHENTICATED_USER.id,
+  ])
+})
+
+test('POST /budgets creates a normalized budget for the authenticated user', async () => {
+  let receivedSql
+  let receivedParams
+
+  const database =
+    createAuthenticatedDatabase(
+      async (sql, params) => {
+        receivedSql = sql
+        receivedParams = params
+
+        return {
+          rowCount: 1,
+          rows: [
+            {
+              id: params[0],
+              start_period: '2026-01',
+              end_period: null,
+              category: 'Alimentação mensal',
+              planned_amount_in_cents:
+                '100000',
+            },
+          ],
+        }
+      },
+    )
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .post('/budgets')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+    .send({
+      startPeriod: '2026-01',
+      endPeriod: null,
+      category:
+        '  Alimentação   mensal  ',
+      plannedAmountInCents: 100000,
+      user_id:
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      categoryKey: 'forjada',
+    })
+
+  assert.equal(response.status, 201)
+
+  assert.match(
+    response.body.id,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  )
+
+  assert.deepEqual(response.body, {
+    id: response.body.id,
+    startPeriod: '2026-01',
+    endPeriod: null,
+    category: 'Alimentação mensal',
+    plannedAmountInCents: 100000,
+  })
+
+  assert.deepEqual(receivedParams, [
+    response.body.id,
+    AUTHENTICATED_USER.id,
+    '2026-01-01',
+    null,
+    'Alimentação mensal',
+    'alimentacao mensal',
+    100000,
+  ])
+
+  assert.match(
+    receivedSql,
+    /INSERT INTO budgets/,
+  )
+})
+
+test('POST /budgets returns 409 for an overlapping category period', async () => {
+  const database =
+    createAuthenticatedDatabase(
+      async () => {
+        const error =
+          new Error(
+            'Overlapping budget',
+          )
+
+        error.code = '23P01'
+        error.constraint =
+          'budgets_no_overlapping_periods'
+
+        throw error
+      },
+    )
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .post('/budgets')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+    .send({
+      startPeriod: '2026-01',
+      endPeriod: '2026-12',
+      category: 'Alimentação',
+      plannedAmountInCents: 100000,
+    })
+
+  assert.equal(response.status, 409)
+
+  assert.deepEqual(response.body, {
+    error:
+      'Já existe um orçamento para essa categoria em parte do período informado.',
+  })
+})
+
+test('POST /budgets rejects invalid input before accessing budget persistence', async () => {
+  let budgetQueries = 0
+
+  const database =
+    createAuthenticatedDatabase(
+      async () => {
+        budgetQueries += 1
+
+        return {
+          rows: [],
+        }
+      },
+    )
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .post('/budgets')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+    .send({
+      startPeriod: '2026-01',
+      category: 'RÉSERVA',
+      plannedAmountInCents: 100000,
+    })
+
+  assert.equal(response.status, 400)
+
+  assert.deepEqual(response.body, {
+    error:
+      'A categoria Reserva não pode ter orçamento.',
+  })
+
+  assert.equal(budgetQueries, 0)
+})
+
 test('transaction routes require authentication', async () => {
   const database = createFakeDatabase(async () => {
     throw new Error('Database should not be called')
