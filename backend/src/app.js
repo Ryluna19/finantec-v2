@@ -7,7 +7,10 @@ import {
   hashSessionToken,
 } from './session.js'
 import { validateTransactionInput } from './transactionValidation.js'
-import { validateBudgetInput } from './budgetValidation.js'
+import {
+  isValidBudgetPeriod,
+  validateBudgetInput,
+} from './budgetValidation.js'
 import multer from 'multer'
 
 import {
@@ -922,6 +925,228 @@ export function createApp({ database }) {
       }
     },
   )
+
+    app.post('/budgets/:id/split', async (request, response) => {
+    const { id } = request.params
+    const { splitPeriod } = request.body ?? {}
+
+    if (!isValidUuid(id)) {
+      return response.status(400).json({
+        error: 'Identificador de orçamento inválido.',
+      })
+    }
+
+    if (!isValidBudgetPeriod(splitPeriod)) {
+      return response.status(400).json({
+        error: 'Informe um mês de alteração válido.',
+      })
+    }
+
+    let client
+    let transactionStarted = false
+
+    try {
+      client = await database.connect()
+      await client.query('BEGIN')
+      transactionStarted = true
+
+      const existingResult = await client.query(
+        `
+          SELECT
+            to_char(start_period, 'YYYY-MM') AS start_period,
+            CASE
+              WHEN end_period IS NULL THEN NULL
+              ELSE to_char(end_period, 'YYYY-MM')
+            END AS end_period
+          FROM budgets
+          WHERE id = $1
+            AND user_id = $2
+          FOR UPDATE
+        `,
+        [id, request.user.id],
+      )
+
+      if (existingResult.rowCount === 0) {
+        await client.query('ROLLBACK')
+        transactionStarted = false
+
+        return response.status(404).json({
+          error: 'Orçamento não encontrado.',
+        })
+      }
+
+      const existingBudget = existingResult.rows[0]
+
+      if (splitPeriod <= existingBudget.start_period) {
+        await client.query('ROLLBACK')
+        transactionStarted = false
+
+        return response.status(400).json({
+          error:
+            'O mês da alteração deve ser posterior ao início do orçamento.',
+        })
+      }
+
+      if (
+        existingBudget.end_period !== null &&
+        splitPeriod > existingBudget.end_period
+      ) {
+        await client.query('ROLLBACK')
+        transactionStarted = false
+
+        return response.status(409).json({
+          error:
+            'O mês da alteração está fora da vigência atual do orçamento.',
+        })
+      }
+
+      // Fim omitido herda o fim da regra original (contrato da V1).
+      const requestedEndPeriod =
+        request.body?.endPeriod === undefined
+          ? existingBudget.end_period
+          : request.body.endPeriod
+
+      const validation = validateBudgetInput({
+        startPeriod: splitPeriod,
+        endPeriod: requestedEndPeriod,
+        category: request.body?.category,
+        plannedAmountInCents:
+          request.body?.plannedAmountInCents,
+      })
+
+      if (validation.error) {
+        await client.query('ROLLBACK')
+        transactionStarted = false
+
+        return response.status(400).json({
+          error: validation.error,
+        })
+      }
+
+      const {
+        endPeriod,
+        category,
+        categoryKey,
+        plannedAmountInCents,
+      } = validation.budget
+
+      const splitDate = `${splitPeriod}-01`
+      const endDate = endPeriod === null
+        ? null
+        : `${endPeriod}-01`
+      const newId = randomUUID()
+
+      // Encerra o segmento antigo no mês imediatamente anterior.
+      const updatedResult = await client.query(
+        `
+          UPDATE budgets
+          SET end_period = (
+            $1::date - INTERVAL '1 month'
+          )::date
+          WHERE id = $2
+            AND user_id = $3
+          RETURNING
+            id,
+            to_char(start_period, 'YYYY-MM') AS start_period,
+            to_char(end_period, 'YYYY-MM') AS end_period,
+            category,
+            planned_amount_in_cents
+        `,
+        [splitDate, id, request.user.id],
+      )
+
+      const insertedResult = await client.query(
+        `
+          INSERT INTO budgets (
+            id,
+            user_id,
+            start_period,
+            end_period,
+            category,
+            category_key,
+            planned_amount_in_cents
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING
+            id,
+            to_char(start_period, 'YYYY-MM') AS start_period,
+            CASE
+              WHEN end_period IS NULL THEN NULL
+              ELSE to_char(end_period, 'YYYY-MM')
+            END AS end_period,
+            category,
+            planned_amount_in_cents
+        `,
+        [
+          newId,
+          request.user.id,
+          splitDate,
+          endDate,
+          category,
+          categoryKey,
+          plannedAmountInCents,
+        ],
+      )
+
+      await client.query('COMMIT')
+      transactionStarted = false
+
+      const previous = updatedResult.rows[0]
+      const created = insertedResult.rows[0]
+
+      return response.status(201).json({
+        previousBudget: {
+          id: previous.id,
+          startPeriod: previous.start_period,
+          endPeriod: previous.end_period,
+          category: previous.category,
+          plannedAmountInCents: Number(
+            previous.planned_amount_in_cents,
+          ),
+        },
+        createdBudget: {
+          id: created.id,
+          startPeriod: created.start_period,
+          endPeriod: created.end_period,
+          category: created.category,
+          plannedAmountInCents: Number(
+            created.planned_amount_in_cents,
+          ),
+        },
+      })
+    } catch (error) {
+      if (client && transactionStarted) {
+        try {
+          await client.query('ROLLBACK')
+        } catch (rollbackError) {
+          console.error(
+            'Failed to rollback budget split:',
+            rollbackError,
+          )
+        }
+      }
+
+      if (
+        error?.code === '23P01' &&
+        error?.constraint === 'budgets_no_overlapping_periods'
+      ) {
+        return response.status(409).json({
+          error:
+            'Já existe um orçamento para essa categoria em parte do período informado.',
+        })
+      }
+
+      console.error('Failed to split budget:', error)
+
+      return response.status(500).json({
+        error: 'Não foi possível dividir o orçamento.',
+      })
+    } finally {
+      if (client) {
+        client.release()
+      }
+    }
+  })
   app.post(
     '/transactions/import/preview',
     receiveTransactionImportFile,

@@ -640,6 +640,7 @@ test('budget routes require authentication', async () => {
     ['post', '/budgets'],
     ['put', `/budgets/${budgetId}`],
     ['delete', `/budgets/${budgetId}`],
+    ['post', `/budgets/${budgetId}/split`],
   ]
 
   for (const [method, path] of routes) {
@@ -1358,6 +1359,219 @@ test('PUT and DELETE /budgets/:id reject an invalid UUID before accessing budget
   )
 
   assert.equal(budgetQueries, 0)
+})
+
+const SPLIT_BUDGET_ID =
+  '11111111-1111-4111-8111-111111111111'
+
+function makeSplitTestDatabase({
+  originalEndPeriod = '2026-12',
+  onInsert,
+} = {}) {
+  const calls = []
+  let released = false
+
+  const database = createAuthenticatedTransactionalDatabase({
+    queryImplementation: async () => {
+      throw new Error('Unexpected pool query')
+    },
+    clientQueryImplementation: async (sql, params) => {
+      calls.push({ sql, params })
+
+      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+        return { rowCount: 0, rows: [] }
+      }
+
+      if (sql.includes('FROM budgets') && sql.includes('FOR UPDATE')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            start_period: '2026-01',
+            end_period: originalEndPeriod,
+          }],
+        }
+      }
+
+      if (sql.includes('UPDATE budgets')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: SPLIT_BUDGET_ID,
+            start_period: '2026-01',
+            end_period: '2026-03',
+            category: 'Alimentação',
+            planned_amount_in_cents: '100000',
+          }],
+        }
+      }
+
+      if (sql.includes('INSERT INTO budgets')) {
+        if (onInsert) return onInsert(sql, params)
+
+        return {
+          rowCount: 1,
+          rows: [{
+            id: params[0],
+            start_period: '2026-04',
+            end_period: params[3] === null ? null : params[3].slice(0, 7),
+            category: params[4],
+            planned_amount_in_cents: String(params[6]),
+          }],
+        }
+      }
+
+      throw new Error(`Unexpected query: ${sql}`)
+    },
+  })
+
+  database.client.release = () => { released = true }
+
+  return {
+    database,
+    calls,
+    wasReleased: () => released,
+  }
+}
+
+test('POST /budgets/:id/split preserves previous months and inherits the original end', async () => {
+  const setup = makeSplitTestDatabase()
+  const app = createApp({ database: setup.database })
+
+  const response = await request(app)
+    .post(`/budgets/${SPLIT_BUDGET_ID}/split`)
+    .set('Cookie', `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`)
+    .send({
+      splitPeriod: '2026-04',
+      category: '  Casa   Nova  ',
+      plannedAmountInCents: 150000,
+      user_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      categoryKey: 'forjada',
+    })
+
+  assert.equal(response.status, 201)
+  assert.deepEqual(response.body.previousBudget, {
+    id: SPLIT_BUDGET_ID,
+    startPeriod: '2026-01',
+    endPeriod: '2026-03',
+    category: 'Alimentação',
+    plannedAmountInCents: 100000,
+  })
+  assert.equal(response.body.createdBudget.startPeriod, '2026-04')
+  assert.equal(response.body.createdBudget.endPeriod, '2026-12')
+  assert.equal(response.body.createdBudget.category, 'Casa Nova')
+  assert.equal(response.body.createdBudget.plannedAmountInCents, 150000)
+  assert.notEqual(response.body.createdBudget.id, SPLIT_BUDGET_ID)
+
+  assert.equal(setup.calls[0].sql, 'BEGIN')
+  assert.match(setup.calls[1].sql, /FOR UPDATE/)
+  assert.match(setup.calls[1].sql, /WHERE id = \$1\s+AND user_id = \$2/)
+  assert.deepEqual(setup.calls[1].params, [
+    SPLIT_BUDGET_ID,
+    AUTHENTICATED_USER.id,
+  ])
+  assert.match(setup.calls[2].sql, /UPDATE budgets/)
+  assert.match(setup.calls[2].sql, /INTERVAL '1 month'/)
+  assert.deepEqual(setup.calls[2].params, [
+    '2026-04-01',
+    SPLIT_BUDGET_ID,
+    AUTHENTICATED_USER.id,
+  ])
+  assert.deepEqual(setup.calls[3].params.slice(1), [
+    AUTHENTICATED_USER.id,
+    '2026-04-01',
+    '2026-12-01',
+    'Casa Nova',
+    'casa nova',
+    150000,
+  ])
+  assert.equal(setup.calls[4].sql, 'COMMIT')
+  assert.equal(setup.calls.length, 5)
+  assert.equal(setup.wasReleased(), true)
+})
+
+test('POST /budgets/:id/split treats explicit null end as continuous', async () => {
+  const setup = makeSplitTestDatabase()
+  const app = createApp({ database: setup.database })
+
+  const response = await request(app)
+    .post(`/budgets/${SPLIT_BUDGET_ID}/split`)
+    .set('Cookie', `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`)
+    .send({
+      splitPeriod: '2026-04',
+      endPeriod: null,
+      category: 'Alimentação',
+      plannedAmountInCents: 120000,
+    })
+
+  assert.equal(response.status, 201)
+  assert.equal(response.body.createdBudget.endPeriod, null)
+  assert.equal(setup.calls[3].params[3], null)
+})
+
+test('POST /budgets/:id/split rejects an out-of-range month without writing', async () => {
+  const setup = makeSplitTestDatabase({ originalEndPeriod: '2026-03' })
+  const app = createApp({ database: setup.database })
+
+  const response = await request(app)
+    .post(`/budgets/${SPLIT_BUDGET_ID}/split`)
+    .set('Cookie', `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`)
+    .send({
+      splitPeriod: '2026-04',
+      category: 'Alimentação',
+      plannedAmountInCents: 100000,
+    })
+
+  assert.equal(response.status, 409)
+  assert.equal(setup.calls.length, 3)
+  assert.equal(setup.calls[2].sql, 'ROLLBACK')
+  assert.equal(setup.wasReleased(), true)
+})
+
+test('POST /budgets/:id/split rolls back the old segment if the INSERT conflicts', async () => {
+  const setup = makeSplitTestDatabase({
+    onInsert: async () => {
+      const error = new Error('Exclusion constraint conflict')
+      error.code = '23P01'
+      error.constraint = 'budgets_no_overlapping_periods'
+      throw error
+    },
+  })
+  const app = createApp({ database: setup.database })
+
+  const response = await request(app)
+    .post(`/budgets/${SPLIT_BUDGET_ID}/split`)
+    .set('Cookie', `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`)
+    .send({
+      splitPeriod: '2026-04',
+      category: 'Alimentação',
+      plannedAmountInCents: 130000,
+    })
+
+  assert.equal(response.status, 409)
+  assert.equal(setup.calls[0].sql, 'BEGIN')
+  assert.match(setup.calls[2].sql, /UPDATE budgets/)
+  assert.match(setup.calls[3].sql, /INSERT INTO budgets/)
+  assert.equal(setup.calls[4].sql, 'ROLLBACK')
+  assert.equal(setup.calls.length, 5)
+  assert.equal(setup.wasReleased(), true)
+})
+
+test('POST /budgets/:id/split rejects an invalid period before opening a transaction', async () => {
+  let connections = 0
+  const database = createAuthenticatedDatabase(async () => {
+    connections += 1
+    throw new Error('Unexpected budget query')
+  })
+  database.connect = async () => { connections += 1 }
+
+  const app = createApp({ database })
+  const response = await request(app)
+    .post(`/budgets/${SPLIT_BUDGET_ID}/split`)
+    .set('Cookie', `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`)
+    .send({ splitPeriod: '2026-13' })
+
+  assert.equal(response.status, 400)
+  assert.equal(connections, 0)
 })
 
 test('transaction routes require authentication', async () => {
