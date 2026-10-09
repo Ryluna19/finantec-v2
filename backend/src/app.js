@@ -569,40 +569,136 @@ export function createApp({ database }) {
   })
 
   app.use('/transactions', requireAuthentication)
-  app.use('/budgets', requireAuthentication)
-  
-  app.get('/budgets', async (request, response) => {
-  try {
-    const result = await database.query(
-      `
-        SELECT
-          id,
-          to_char(
-            start_period,
-            'YYYY-MM'
-          ) AS start_period,
-          CASE
-            WHEN end_period IS NULL
-              THEN NULL
-            ELSE to_char(
-              end_period,
-              'YYYY-MM'
-            )
-          END AS end_period,
-          category,
-          planned_amount_in_cents
-        FROM budgets
-        WHERE user_id = $1
-        ORDER BY
-          start_period DESC,
-          category_key ASC,
-          id DESC
-      `,
-      [request.user.id],
-    )
+    app.use('/budgets', requireAuthentication)
 
-    const budgets = result.rows.map(
-      (budget) => ({
+  app.get('/budgets', async (request, response) => {
+    try {
+      const result = await database.query(
+        `
+          SELECT
+            id,
+            to_char(
+              start_period,
+              'YYYY-MM'
+            ) AS start_period,
+            CASE
+              WHEN end_period IS NULL
+                THEN NULL
+              ELSE to_char(
+                end_period,
+                'YYYY-MM'
+              )
+            END AS end_period,
+            category,
+            planned_amount_in_cents
+          FROM budgets
+          WHERE user_id = $1
+          ORDER BY
+            start_period DESC,
+            category_key ASC,
+            id DESC
+        `,
+        [request.user.id],
+      )
+
+      const budgets = result.rows.map(
+        (budget) => ({
+          id: budget.id,
+          startPeriod: budget.start_period,
+          endPeriod: budget.end_period,
+          category: budget.category,
+          plannedAmountInCents: Number(
+            budget.planned_amount_in_cents,
+          ),
+        }),
+      )
+
+      return response.json(budgets)
+    } catch (error) {
+      console.error(
+        'Failed to load budgets:',
+        error,
+      )
+
+      return response.status(500).json({
+        error:
+          'Não foi possível carregar os orçamentos.',
+      })
+    }
+  })
+
+  app.post('/budgets', async (request, response) => {
+    const validation =
+      validateBudgetInput(request.body)
+
+    if (validation.error) {
+      return response.status(400).json({
+        error: validation.error,
+      })
+    }
+
+    const {
+      startPeriod,
+      endPeriod,
+      category,
+      categoryKey,
+      plannedAmountInCents,
+    } = validation.budget
+
+    const id = randomUUID()
+
+    const startPeriodDate =
+      `${startPeriod}-01`
+
+    const endPeriodDate =
+      endPeriod === null
+        ? null
+        : `${endPeriod}-01`
+
+    try {
+      const result = await database.query(
+        `
+          INSERT INTO budgets (
+            id,
+            user_id,
+            start_period,
+            end_period,
+            category,
+            category_key,
+            planned_amount_in_cents
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING
+            id,
+            to_char(
+              start_period,
+              'YYYY-MM'
+            ) AS start_period,
+            CASE
+              WHEN end_period IS NULL
+                THEN NULL
+              ELSE to_char(
+                end_period,
+                'YYYY-MM'
+              )
+            END AS end_period,
+            category,
+            planned_amount_in_cents
+        `,
+        [
+          id,
+          request.user.id,
+          startPeriodDate,
+          endPeriodDate,
+          category,
+          categoryKey,
+          plannedAmountInCents,
+        ],
+      )
+
+      const budget = result.rows[0]
+
+      return response.status(201).json({
         id: budget.id,
         startPeriod: budget.start_period,
         endPeriod: budget.end_period,
@@ -610,126 +706,222 @@ export function createApp({ database }) {
         plannedAmountInCents: Number(
           budget.planned_amount_in_cents,
         ),
-      }),
-    )
+      })
+    } catch (error) {
+      if (
+        error?.code === '23P01' &&
+        error?.constraint ===
+          'budgets_no_overlapping_periods'
+      ) {
+        return response.status(409).json({
+          error:
+            'Já existe um orçamento para essa categoria em parte do período informado.',
+        })
+      }
 
-    return response.json(budgets)
-  } catch (error) {
-    console.error(
-      'Failed to load budgets:',
-      error,
-    )
+      console.error(
+        'Failed to create budget:',
+        error,
+      )
 
-    return response.status(500).json({
-      error:
-        'Não foi possível carregar os orçamentos.',
-    })
-  }
-})
-
-app.post('/budgets', async (request, response) => {
-  const validation =
-    validateBudgetInput(request.body)
-
-  if (validation.error) {
-    return response.status(400).json({
-      error: validation.error,
-    })
-  }
-
-  const {
-    startPeriod,
-    endPeriod,
-    category,
-    categoryKey,
-    plannedAmountInCents,
-  } = validation.budget
-
-  const id = randomUUID()
-
-  const startPeriodDate =
-    `${startPeriod}-01`
-
-  const endPeriodDate =
-    endPeriod === null
-      ? null
-      : `${endPeriod}-01`
-
-  try {
-    const result = await database.query(
-      `
-        INSERT INTO budgets (
-          id,
-          user_id,
-          start_period,
-          end_period,
-          category,
-          category_key,
-          planned_amount_in_cents
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING
-          id,
-          to_char(
-            start_period,
-            'YYYY-MM'
-          ) AS start_period,
-          CASE
-            WHEN end_period IS NULL
-              THEN NULL
-            ELSE to_char(
-              end_period,
-              'YYYY-MM'
-            )
-          END AS end_period,
-          category,
-          planned_amount_in_cents
-      `,
-      [
-        id,
-        request.user.id,
-        startPeriodDate,
-        endPeriodDate,
-        category,
-        categoryKey,
-        plannedAmountInCents,
-      ],
-    )
-
-    const budget = result.rows[0]
-
-    return response.status(201).json({
-      id: budget.id,
-      startPeriod: budget.start_period,
-      endPeriod: budget.end_period,
-      category: budget.category,
-      plannedAmountInCents: Number(
-        budget.planned_amount_in_cents,
-      ),
-    })
-  } catch (error) {
-    if (
-      error?.code === '23P01' &&
-      error?.constraint ===
-        'budgets_no_overlapping_periods'
-    ) {
-      return response.status(409).json({
+      return response.status(500).json({
         error:
-          'Já existe um orçamento para essa categoria em parte do período informado.',
+          'Não foi possível cadastrar o orçamento.',
+      })
+    }
+  })
+
+  app.put('/budgets/:id', async (request, response) => {
+    const { id } = request.params
+
+    if (!isValidUuid(id)) {
+      return response.status(400).json({
+        error:
+          'Identificador de orçamento inválido.',
       })
     }
 
-    console.error(
-      'Failed to create budget:',
-      error,
-    )
+    try {
+      const currentResult =
+        await database.query(
+          `
+            SELECT
+              to_char(
+                start_period,
+                'YYYY-MM'
+              ) AS start_period
+            FROM budgets
+            WHERE id = $1
+              AND user_id = $2
+          `,
+          [
+            id,
+            request.user.id,
+          ],
+        )
 
-    return response.status(500).json({
-      error:
-        'Não foi possível cadastrar o orçamento.',
-    })
-  }
-})
+      if (currentResult.rowCount === 0) {
+        return response.status(404).json({
+          error: 'Orçamento não encontrado.',
+        })
+      }
+
+      const validation =
+        validateBudgetInput({
+          startPeriod:
+            currentResult.rows[0].start_period,
+          endPeriod:
+            request.body?.endPeriod,
+          category:
+            request.body?.category,
+          plannedAmountInCents:
+            request.body
+              ?.plannedAmountInCents,
+        })
+
+      if (validation.error) {
+        return response.status(400).json({
+          error: validation.error,
+        })
+      }
+
+      const {
+        endPeriod,
+        category,
+        categoryKey,
+        plannedAmountInCents,
+      } = validation.budget
+
+      const endPeriodDate =
+        endPeriod === null
+          ? null
+          : `${endPeriod}-01`
+
+      const result =
+        await database.query(
+          `
+            UPDATE budgets
+            SET
+              end_period = $1,
+              category = $2,
+              category_key = $3,
+              planned_amount_in_cents = $4
+            WHERE id = $5
+              AND user_id = $6
+            RETURNING
+              id,
+              to_char(
+                start_period,
+                'YYYY-MM'
+              ) AS start_period,
+              CASE
+                WHEN end_period IS NULL
+                  THEN NULL
+                ELSE to_char(
+                  end_period,
+                  'YYYY-MM'
+                )
+              END AS end_period,
+              category,
+              planned_amount_in_cents
+          `,
+          [
+            endPeriodDate,
+            category,
+            categoryKey,
+            plannedAmountInCents,
+            id,
+            request.user.id,
+          ],
+        )
+
+      if (result.rowCount === 0) {
+        return response.status(404).json({
+          error: 'Orçamento não encontrado.',
+        })
+      }
+
+      const budget = result.rows[0]
+
+      return response.json({
+        id: budget.id,
+        startPeriod: budget.start_period,
+        endPeriod: budget.end_period,
+        category: budget.category,
+        plannedAmountInCents: Number(
+          budget.planned_amount_in_cents,
+        ),
+      })
+    } catch (error) {
+      if (
+        error?.code === '23P01' &&
+        error?.constraint ===
+          'budgets_no_overlapping_periods'
+      ) {
+        return response.status(409).json({
+          error:
+            'Já existe um orçamento para essa categoria em parte do período informado.',
+        })
+      }
+
+      console.error(
+        'Failed to update budget:',
+        error,
+      )
+
+      return response.status(500).json({
+        error:
+          'Não foi possível atualizar o orçamento.',
+      })
+    }
+  })
+
+  app.delete(
+    '/budgets/:id',
+    async (request, response) => {
+      const { id } = request.params
+
+      if (!isValidUuid(id)) {
+        return response.status(400).json({
+          error:
+            'Identificador de orçamento inválido.',
+        })
+      }
+
+      try {
+        const result = await database.query(
+          `
+            DELETE FROM budgets
+            WHERE id = $1
+              AND user_id = $2
+            RETURNING id
+          `,
+          [
+            id,
+            request.user.id,
+          ],
+        )
+
+        if (result.rowCount === 0) {
+          return response.status(404).json({
+            error: 'Orçamento não encontrado.',
+          })
+        }
+
+        return response.status(204).send()
+      } catch (error) {
+        console.error(
+          'Failed to delete budget:',
+          error,
+        )
+
+        return response.status(500).json({
+          error:
+            'Não foi possível excluir o orçamento.',
+        })
+      }
+    },
+  )
   app.post(
     '/transactions/import/preview',
     receiveTransactionImportFile,

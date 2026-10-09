@@ -632,9 +632,14 @@ test('budget routes require authentication', async () => {
     database,
   })
 
+  const budgetId =
+    '6b959525-67fc-453c-b4b2-956058724f22'
+
   const routes = [
     ['get', '/budgets'],
     ['post', '/budgets'],
+    ['put', `/budgets/${budgetId}`],
+    ['delete', `/budgets/${budgetId}`],
   ]
 
   for (const [method, path] of routes) {
@@ -885,6 +890,472 @@ test('POST /budgets rejects invalid input before accessing budget persistence', 
     error:
       'A categoria Reserva não pode ter orçamento.',
   })
+
+  assert.equal(budgetQueries, 0)
+})
+
+test('PUT /budgets/:id updates the same budget while preserving id and start period', async () => {
+  const id =
+    '11111111-1111-4111-8111-111111111111'
+
+  const budgetQueries = []
+
+  const database =
+    createAuthenticatedDatabase(
+      async (sql, params) => {
+        budgetQueries.push({
+          sql,
+          params,
+        })
+
+        if (
+          sql.includes('SELECT') &&
+          sql.includes('FROM budgets')
+        ) {
+          return {
+            rowCount: 1,
+            rows: [
+              {
+                start_period:
+                  '2026-01',
+              },
+            ],
+          }
+        }
+
+        if (
+          sql.includes('UPDATE budgets')
+        ) {
+          return {
+            rowCount: 1,
+            rows: [
+              {
+                id,
+                start_period:
+                  '2026-01',
+                end_period:
+                  '2026-06',
+                category:
+                  'Alimentação mensal',
+                planned_amount_in_cents:
+                  '150000',
+              },
+            ],
+          }
+        }
+
+        throw new Error(
+          'Unexpected budget query',
+        )
+      },
+    )
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .put(`/budgets/${id}`)
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+    .send({
+      startPeriod: '2099-12',
+      endPeriod: '2026-06',
+      category:
+        '  Alimentação   mensal  ',
+      plannedAmountInCents: 150000,
+      user_id:
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      categoryKey: 'forjada',
+    })
+
+  assert.equal(response.status, 200)
+
+  assert.deepEqual(response.body, {
+    id,
+    startPeriod: '2026-01',
+    endPeriod: '2026-06',
+    category: 'Alimentação mensal',
+    plannedAmountInCents: 150000,
+  })
+
+  assert.equal(
+    budgetQueries.length,
+    2,
+  )
+
+  assert.match(
+    budgetQueries[0].sql,
+    /FROM budgets/,
+  )
+
+  assert.match(
+    budgetQueries[0].sql,
+    /WHERE id = \$1\s+AND user_id = \$2/,
+  )
+
+  assert.deepEqual(
+    budgetQueries[0].params,
+    [
+      id,
+      AUTHENTICATED_USER.id,
+    ],
+  )
+
+  assert.match(
+    budgetQueries[1].sql,
+    /UPDATE budgets/,
+  )
+
+  assert.doesNotMatch(
+    budgetQueries[1].sql,
+    /start_period\s*=/,
+  )
+
+  assert.deepEqual(
+    budgetQueries[1].params,
+    [
+      '2026-06-01',
+      'Alimentação mensal',
+      'alimentacao mensal',
+      150000,
+      id,
+      AUTHENTICATED_USER.id,
+    ],
+  )
+})
+
+test('PUT /budgets/:id validates the end period against the stored start period', async () => {
+  let budgetQueries = 0
+
+  const database =
+    createAuthenticatedDatabase(
+      async (sql) => {
+        budgetQueries += 1
+
+        assert.doesNotMatch(
+          sql,
+          /UPDATE budgets/,
+        )
+
+        return {
+          rowCount: 1,
+          rows: [
+            {
+              start_period:
+                '2026-05',
+            },
+          ],
+        }
+      },
+    )
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .put(
+      '/budgets/11111111-1111-4111-8111-111111111111',
+    )
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+    .send({
+      startPeriod: '2020-01',
+      endPeriod: '2026-04',
+      category: 'Casa',
+      plannedAmountInCents: 100000,
+    })
+
+  assert.equal(response.status, 400)
+
+  assert.deepEqual(response.body, {
+    error:
+      'O mês final não pode ser anterior ao mês inicial.',
+  })
+
+  assert.equal(budgetQueries, 1)
+})
+
+test('PUT /budgets/:id returns 404 for a missing or foreign budget', async () => {
+  const id =
+    '11111111-1111-4111-8111-111111111111'
+
+  let budgetQueries = 0
+
+  const database =
+    createAuthenticatedDatabase(
+      async (sql, params) => {
+        budgetQueries += 1
+
+        assert.match(
+          sql,
+          /WHERE id = \$1\s+AND user_id = \$2/,
+        )
+
+        assert.deepEqual(params, [
+          id,
+          AUTHENTICATED_USER.id,
+        ])
+
+        return {
+          rowCount: 0,
+          rows: [],
+        }
+      },
+    )
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .put(`/budgets/${id}`)
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+    .send({
+      endPeriod: null,
+      category: 'Casa',
+      plannedAmountInCents: 100000,
+    })
+
+  assert.equal(response.status, 404)
+
+  assert.deepEqual(response.body, {
+    error: 'Orçamento não encontrado.',
+  })
+
+  assert.equal(budgetQueries, 1)
+})
+
+test('PUT /budgets/:id returns 409 when the edited rule overlaps another budget', async () => {
+  const id =
+    '11111111-1111-4111-8111-111111111111'
+
+  const database =
+    createAuthenticatedDatabase(
+      async (sql) => {
+        if (
+          sql.includes('FROM budgets')
+        ) {
+          return {
+            rowCount: 1,
+            rows: [
+              {
+                start_period:
+                  '2026-01',
+              },
+            ],
+          }
+        }
+
+        if (
+          sql.includes('UPDATE budgets')
+        ) {
+          const error =
+            new Error(
+              'Overlapping budget',
+            )
+
+          error.code = '23P01'
+          error.constraint =
+            'budgets_no_overlapping_periods'
+
+          throw error
+        }
+
+        throw new Error(
+          'Unexpected budget query',
+        )
+      },
+    )
+
+  const app = createApp({
+    database,
+  })
+
+  const response = await request(app)
+    .put(`/budgets/${id}`)
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+    .send({
+      endPeriod: '2026-12',
+      category: 'Alimentação',
+      plannedAmountInCents: 100000,
+    })
+
+  assert.equal(response.status, 409)
+
+  assert.deepEqual(response.body, {
+    error:
+      'Já existe um orçamento para essa categoria em parte do período informado.',
+  })
+})
+
+test('DELETE /budgets/:id deletes only the authenticated user budget', async () => {
+  const id =
+    '11111111-1111-4111-8111-111111111111'
+
+  let budgetExists = true
+  const receivedParams = []
+
+  const database =
+    createAuthenticatedDatabase(
+      async (sql, params) => {
+        assert.match(
+          sql,
+          /DELETE FROM budgets/,
+        )
+
+        assert.match(
+          sql,
+          /WHERE id = \$1\s+AND user_id = \$2/,
+        )
+
+        receivedParams.push(params)
+
+        if (budgetExists) {
+          budgetExists = false
+
+          return {
+            rowCount: 1,
+            rows: [{ id }],
+          }
+        }
+
+        return {
+          rowCount: 0,
+          rows: [],
+        }
+      },
+    )
+
+  const app = createApp({
+    database,
+  })
+
+  const firstResponse = await request(app)
+    .delete(`/budgets/${id}`)
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+
+  assert.equal(
+    firstResponse.status,
+    204,
+  )
+
+  assert.equal(
+    firstResponse.text,
+    '',
+  )
+
+  const secondResponse = await request(app)
+    .delete(`/budgets/${id}`)
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+
+  assert.equal(
+    secondResponse.status,
+    404,
+  )
+
+  assert.deepEqual(
+    secondResponse.body,
+    {
+      error:
+        'Orçamento não encontrado.',
+    },
+  )
+
+  assert.deepEqual(
+    receivedParams,
+    [
+      [
+        id,
+        AUTHENTICATED_USER.id,
+      ],
+      [
+        id,
+        AUTHENTICATED_USER.id,
+      ],
+    ],
+  )
+})
+
+test('PUT and DELETE /budgets/:id reject an invalid UUID before accessing budget persistence', async () => {
+  let budgetQueries = 0
+
+  const database =
+    createAuthenticatedDatabase(
+      async () => {
+        budgetQueries += 1
+
+        return {
+          rows: [],
+        }
+      },
+    )
+
+  const app = createApp({
+    database,
+  })
+
+  const putResponse = await request(app)
+    .put('/budgets/abc')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+    .send({
+      endPeriod: null,
+      category: 'Casa',
+      plannedAmountInCents: 100000,
+    })
+
+  const deleteResponse = await request(app)
+    .delete('/budgets/abc')
+    .set(
+      'Cookie',
+      `finantec_session=${AUTHENTICATED_SESSION_TOKEN}`,
+    )
+
+  assert.equal(
+    putResponse.status,
+    400,
+  )
+
+  assert.equal(
+    deleteResponse.status,
+    400,
+  )
+
+  assert.deepEqual(
+    putResponse.body,
+    {
+      error:
+        'Identificador de orçamento inválido.',
+    },
+  )
+
+  assert.deepEqual(
+    deleteResponse.body,
+    {
+      error:
+        'Identificador de orçamento inválido.',
+    },
+  )
 
   assert.equal(budgetQueries, 0)
 })
