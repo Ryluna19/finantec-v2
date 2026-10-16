@@ -1331,3 +1331,175 @@
   cursor: not-allowed;
   opacity: 0.5;
 }
+
+
+/* Orçamento — consulta mensal. */
+
+#budgets .budget-period-bar {
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 20px;
+}
+
+#budgets .budget-period-bar .form-field {
+  width: min(100%, 220px);
+}
+
+#budgets .budget-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 24px;
+}
+
+#budgets .budget-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 20px;
+}
+
+#budgets .budget-summary-item:first-child {
+  padding-left: 0;
+}
+
+#budgets .budget-summary-item + .budget-summary-item {
+  border-left: 1px solid var(--border);
+}
+
+#budgets .budget-summary-item span {
+  color: var(--text-muted);
+  font-size: var(--font-label);
+}
+
+#budgets .budget-summary-item strong {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+#budgets .budget-category-list {
+  display: grid;
+  gap: 0;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+#budgets .budget-category-item {
+  padding: 22px 0;
+}
+
+#budgets .budget-category-item:first-child {
+  padding-top: 0;
+}
+
+#budgets .budget-category-item + .budget-category-item {
+  border-top: 1px solid var(--border);
+}
+
+#budgets .budget-category-header,
+#budgets .budget-category-values {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+#budgets .budget-category-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+#budgets .budget-category-header p,
+#budgets .budget-remaining {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: var(--font-label);
+}
+
+#budgets .budget-status {
+  font-size: var(--font-label);
+  font-weight: 600;
+  text-align: right;
+}
+
+#budgets .budget-status-within_limit {
+  color: var(--success);
+}
+
+#budgets .budget-status-near_limit {
+  color: var(--accent);
+}
+
+#budgets .budget-status-over_limit {
+  color: var(--danger);
+}
+
+#budgets .budget-category-values {
+  margin-top: 20px;
+  margin-bottom: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+#budgets .budget-category-values span {
+  color: var(--text-secondary);
+}
+
+#budgets .budget-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: var(--surface-3);
+}
+
+#budgets .budget-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background-color: var(--accent);
+}
+
+#budgets .budget-progress-over_limit {
+  background-color: var(--danger);
+}
+
+#budgets .budget-remaining {
+  margin-top: 10px;
+}
+
+#budgets .budget-remaining strong {
+  color: var(--text-primary);
+}
+
+@media (max-width: 900px) {
+  #budgets .budget-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 0;
+  }
+
+  #budgets .budget-summary-item:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  #budgets .budget-summary-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  #budgets .budget-summary-item {
+    padding: 0;
+    border-left: 0 !important;
+  }
+
+  #budgets .budget-category-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  #budgets .budget-status {
+    text-align: left;
+  }
+}

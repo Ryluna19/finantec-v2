@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import OverviewPage from '../features/overview/OverviewPage'
 import TransactionsPage from '../features/transactions/TransactionsPage'
+import BudgetsPage from '../features/budgets/BudgetsPage'
 import useTransactions from '../features/transactions/useTransactions'
 import finantecMark from '../assets/branding/finantec-header-mark.svg'
 
@@ -195,6 +196,45 @@ function AuthenticatedShell({
               Transações
             </span>
           </button>
+
+          <button
+            className="nav-link nav-button"
+            type="button"
+            onClick={() =>
+              setActiveView('budgets')
+            }
+            aria-current={
+              activeView === 'budgets'
+                ? 'page'
+                : undefined
+            }
+            title="Orçamento"
+          >
+            <svg
+              className="nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect
+                x="4"
+                y="5"
+                width="16"
+                height="14"
+                rx="2"
+              />
+              <path d="M8 14h3m-3-4h8" />
+            </svg>
+
+            <span className="nav-label">
+              Orçamento
+            </span>
+          </button>
+
         </nav>
 
         <button
@@ -233,7 +273,7 @@ function AuthenticatedShell({
             transactionsLoadError
           }
         />
-      ) : (
+      ) : activeView === 'transactions' ? (
         <TransactionsPage
           transactions={transactions}
           isLoadingTransactions={
@@ -248,11 +288,30 @@ function AuthenticatedShell({
           previewTransactionImport={
             previewTransactionImport
           }
+
           importTransactions={
             importTransactions
           }
         />
+      ) : (
+        <BudgetsPage
+          transactions={transactions}
+          isLoadingTransactions={
+            isLoadingTransactions
+          }
+          transactionsLoadError={
+            transactionsLoadError
+          }
+          captureAuthGeneration={
+            captureAuthGeneration
+          }
+          isCurrentAuthGeneration={
+            isCurrentAuthGeneration
+          }
+          expireSession={expireSession}
+        />
       )}
+
     </div>
   )
 }
