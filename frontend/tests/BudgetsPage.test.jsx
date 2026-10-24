@@ -39,6 +39,81 @@ function apiResponse(status, data) {
   }
 }
 
+function mockBudgetCreationApi(onPost) {
+  const fetchMock = vi.fn(
+    async (url, options = {}) => {
+      if (
+        url === `${API}/auth/me` &&
+        !options.method
+      ) {
+        return apiResponse(200, {
+          user: {
+            id: 'user-1',
+            username: 'Teste',
+          },
+        })
+      }
+
+      if (
+        url === `${API}/transactions` &&
+        !options.method
+      ) {
+        return apiResponse(200, [])
+      }
+
+      if (
+        url === `${API}/budgets` &&
+        !options.method
+      ) {
+        return apiResponse(200, [])
+      }
+
+      if (
+        url === `${API}/budgets` &&
+        options.method === 'POST'
+      ) {
+        return onPost(options)
+      }
+
+      throw new Error(
+        `Requisição inesperada: ${options.method ?? 'GET'} ${url}`,
+      )
+    },
+  )
+
+  vi.stubGlobal('fetch', fetchMock)
+
+  return fetchMock
+}
+
+async function openBudgetCreationForm() {
+  render(<App />)
+
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: 'Orçamento',
+    }),
+  )
+
+  await screen.findByText(
+    'Nenhum orçamento vigente para o mês selecionado.',
+  )
+
+  fireEvent.change(
+    screen.getByLabelText('Mês de referência'),
+    {
+      target: { value: '2026-06' },
+    },
+  )
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Novo limite',
+    }),
+  )
+}
+
+
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
@@ -261,4 +336,221 @@ describe('BudgetsPage', () => {
       ),
     ).toBeNull()
   })
+
+
+  it('cadastra um limite contínuo e atualiza o resumo sem novo GET', async () => {
+    const fetchMock = mockBudgetCreationApi(
+      async (options) => {
+        const payload = JSON.parse(options.body)
+
+        return apiResponse(201, {
+          id: 'budget-created',
+          ...payload,
+        })
+      },
+    )
+
+    await openBudgetCreationForm()
+
+    fireEvent.change(
+      screen.getByLabelText('Categoria do orçamento'),
+      {
+        target: { value: '  Alimentação  ' },
+      },
+    )
+
+    fireEvent.change(
+      screen.getByLabelText('Valor mensal (R$)'),
+      {
+        target: { value: '500,25' },
+      },
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Cadastrar limite',
+      }),
+    )
+
+    await screen.findByText('Alimentação')
+
+    const postCall = fetchMock.mock.calls.find(
+      ([url, options]) =>
+        url === `${API}/budgets` &&
+        options.method === 'POST',
+    )
+
+    expect(postCall).toBeTruthy()
+
+    expect(postCall[1].credentials).toBe(
+      'include',
+    )
+
+    expect(JSON.parse(postCall[1].body)).toEqual({
+      startPeriod: '2026-06',
+      endPeriod: null,
+      category: 'Alimentação',
+      plannedAmountInCents: 50025,
+    })
+
+    const summary = screen.getByRole(
+      'region',
+      { name: 'Resumo do mês' },
+    )
+
+    expect(summary.textContent).toContain(
+      formatCurrency(50025),
+    )
+
+    expect(
+      screen.queryByRole('heading', {
+        name: 'Novo limite',
+      }),
+    ).toBeNull()
+
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url, options]) =>
+          url === `${API}/budgets` &&
+          !options.method,
+      ),
+    ).toHaveLength(1)
+  })
+
+  it('valida a vigência temporária e envia o mês final', async () => {
+    const fetchMock = mockBudgetCreationApi(
+      async (options) => {
+        return apiResponse(201, {
+          id: 'budget-temporary',
+          ...JSON.parse(options.body),
+        })
+      },
+    )
+
+    await openBudgetCreationForm()
+
+    fireEvent.change(
+      screen.getByLabelText('Categoria do orçamento'),
+      {
+        target: { value: 'Saúde' },
+      },
+    )
+
+    fireEvent.change(
+      screen.getByLabelText('Valor mensal (R$)'),
+      {
+        target: { value: '200,00' },
+      },
+    )
+
+    fireEvent.change(
+      screen.getByLabelText('Vigência'),
+      {
+        target: { value: 'temporary' },
+      },
+    )
+
+    fireEvent.change(
+      screen.getByLabelText('Mês final'),
+      {
+        target: { value: '2026-05' },
+      },
+    )
+
+    const form = screen.getByRole(
+      'button',
+      { name: 'Cadastrar limite' },
+    ).closest('form')
+
+    fireEvent.submit(form)
+
+    expect(
+      screen.getByRole('alert').textContent,
+    ).toContain(
+      'O mês final não pode ser anterior ao mês inicial.',
+    )
+
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url, options]) =>
+          url === `${API}/budgets` &&
+          options.method === 'POST',
+      ),
+    ).toHaveLength(0)
+
+    fireEvent.change(
+      screen.getByLabelText('Mês final'),
+      {
+        target: { value: '2026-08' },
+      },
+    )
+
+    fireEvent.submit(form)
+
+    await screen.findByText('Saúde')
+
+    const postCall = fetchMock.mock.calls.find(
+      ([url, options]) =>
+        url === `${API}/budgets` &&
+        options.method === 'POST',
+    )
+
+    expect(JSON.parse(postCall[1].body)).toEqual({
+      startPeriod: '2026-06',
+      endPeriod: '2026-08',
+      category: 'Saúde',
+      plannedAmountInCents: 20000,
+    })
+  })
+
+  it('mantém o formulário aberto quando o backend retorna conflito 409', async () => {
+    mockBudgetCreationApi(
+      async () =>
+        apiResponse(409, {
+          error:
+            'Já existe um orçamento para essa categoria em parte do período informado.',
+        }),
+    )
+
+    await openBudgetCreationForm()
+
+    fireEvent.change(
+      screen.getByLabelText('Categoria do orçamento'),
+      {
+        target: { value: 'Lazer' },
+      },
+    )
+
+    fireEvent.change(
+      screen.getByLabelText('Valor mensal (R$)'),
+      {
+        target: { value: '300,00' },
+      },
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Cadastrar limite',
+      }),
+    )
+
+    const alert = await screen.findByRole('alert')
+
+    expect(alert.textContent).toContain(
+      'Já existe um orçamento para essa categoria',
+    )
+
+    expect(
+      screen.getByRole('heading', {
+        name: 'Novo limite',
+      }),
+    ).toBeTruthy()
+
+    expect(
+      screen.getByText(
+        'Nenhum orçamento vigente para o mês selecionado.',
+      ),
+    ).toBeTruthy()
+  })
+
 })

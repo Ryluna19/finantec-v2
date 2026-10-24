@@ -1,6 +1,7 @@
 
 import { useState } from 'react'
 import useBudgets from './useBudgets'
+import BudgetForm from './BudgetForm'
 import { calculateMonthlyBudgetTracking } from './budgetCalculations'
 
 const currencyFormatter = new Intl.NumberFormat(
@@ -90,15 +91,30 @@ function BudgetsPage({
   const [selectedPeriod, setSelectedPeriod] =
     useState(getCurrentPeriod)
 
+  const [isFormOpen, setIsFormOpen] =
+  useState(false)
+
   const {
-    budgets,
-    isLoadingBudgets,
-    budgetsLoadError,
+  budgets,
+  isLoadingBudgets,
+  budgetsLoadError,
+  addBudget,
   } = useBudgets({
     captureAuthGeneration,
     isCurrentAuthGeneration,
     expireSession,
   })
+
+  async function handleCreateBudget(budgetData) {
+  const created = await addBudget(budgetData)
+
+  if (created !== null) {
+    setSelectedPeriod(created.startPeriod)
+    setIsFormOpen(false)
+  }
+
+  return created
+}
 
   const isLoading =
     isLoadingTransactions || isLoadingBudgets
@@ -153,6 +169,42 @@ function BudgetsPage({
         </div>
       ) : (
         <>
+
+          <div className="budget-actions">
+            <button
+              className="submit-button"
+              type="button"
+              onClick={() => setIsFormOpen(true)}
+              disabled={isFormOpen}
+            >
+              Novo limite
+            </button>
+          </div>
+
+          {isFormOpen && (
+            <section
+              className="panel budget-form-panel"
+              aria-labelledby="budget-form-title"
+            >
+              <h2 id="budget-form-title">
+                Novo limite
+              </h2>
+
+              <BudgetForm
+                key={selectedPeriod}
+                selectedPeriod={selectedPeriod}
+                transactions={transactions}
+                onCreateBudget={
+                  handleCreateBudget
+                }
+                onCancel={() =>
+                  setIsFormOpen(false)
+                }
+              />
+            </section>
+          )}
+
+
           <section
             className="panel budget-summary-panel"
             aria-labelledby="budget-summary-title"
