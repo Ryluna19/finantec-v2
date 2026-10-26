@@ -1566,3 +1566,28 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Orçamento — edição de limites. */
+
+#budgets .budget-edit-notice {
+  grid-column: 1 / -1;
+  padding: 12px 14px;
+  border-left: 2px solid var(--accent);
+  background-color: var(--accent-soft);
+  color: var(--text-secondary);
+  font-size: var(--font-label);
+  line-height: 1.5;
+}
+
+#budgets .budget-category-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+#budgets .budget-category-actions .budget-secondary-action {
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: var(--font-label);
+}

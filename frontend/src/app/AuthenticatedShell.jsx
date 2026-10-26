@@ -1,3 +1,4 @@
+
 import { useState } from 'react'
 import OverviewPage from '../features/overview/OverviewPage'
 import TransactionsPage from '../features/transactions/TransactionsPage'
@@ -15,7 +16,10 @@ function AuthenticatedShell({
     useState(false)
 
   const [activeView, setActiveView] =
-   useState('overview')
+    useState('overview')
+
+  const [isBudgetSaving, setIsBudgetSaving] =
+    useState(false)
 
   const {
     transactions,
@@ -101,7 +105,7 @@ function AuthenticatedShell({
                 d={
                   isSidebarCollapsed
                     ? 'M13 7l5 5-5 5'
-                    : 'M11 7l-5 5 5 5'
+                    : 'M11 7l-5-5-5-5'
                 }
               />
             </svg>
@@ -118,6 +122,7 @@ function AuthenticatedShell({
             onClick={() =>
               setActiveView('overview')
             }
+            disabled={isBudgetSaving}
             aria-current={
               activeView === 'overview'
                 ? 'page'
@@ -172,6 +177,7 @@ function AuthenticatedShell({
             onClick={() =>
               setActiveView('transactions')
             }
+            disabled={isBudgetSaving}
             aria-current={
               activeView === 'transactions'
                 ? 'page'
@@ -203,6 +209,7 @@ function AuthenticatedShell({
             onClick={() =>
               setActiveView('budgets')
             }
+            disabled={isBudgetSaving}
             aria-current={
               activeView === 'budgets'
                 ? 'page'
@@ -234,7 +241,6 @@ function AuthenticatedShell({
               Orçamento
             </span>
           </button>
-
         </nav>
 
         <button
@@ -288,7 +294,6 @@ function AuthenticatedShell({
           previewTransactionImport={
             previewTransactionImport
           }
-
           importTransactions={
             importTransactions
           }
@@ -309,9 +314,11 @@ function AuthenticatedShell({
             isCurrentAuthGeneration
           }
           expireSession={expireSession}
+          onBudgetSavingChange={
+            setIsBudgetSaving
+          }
         />
       )}
-
     </div>
   )
 }

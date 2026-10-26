@@ -16,6 +16,8 @@ const DEFAULT_CATEGORIES = [
 
 function normalizeCategoryKey(category) {
   return category
+    .trim()
+    .replace(/\s+/gu, ' ')
     .normalize('NFKD')
     .replace(/\p{M}+/gu, '')
     .toLowerCase()
@@ -57,17 +59,45 @@ function getCategorySuggestions(transactions) {
   )
 }
 
+function formatAmountForInput(amountInCents) {
+  const whole = Math.floor(amountInCents / 100)
+  const fraction = String(
+    amountInCents % 100,
+  ).padStart(2, '0')
+
+  return `${whole},${fraction}`
+}
+
 function BudgetForm({
   selectedPeriod,
   transactions,
+  budget = null,
   onCreateBudget,
+  onEditBudget,
   onCancel,
 }) {
+  const isEditing = budget !== null
+
+  const isInheritedPeriod =
+    isEditing &&
+    selectedPeriod > budget.startPeriod
+
   const [startPeriod, setStartPeriod] =
-    useState(selectedPeriod)
+    useState(
+      budget?.startPeriod ?? selectedPeriod,
+    )
 
   const [duration, setDuration] =
-    useState('continuous')
+    useState(
+      budget?.endPeriod == null
+        ? 'continuous'
+        : 'temporary',
+    )
+
+  const effectiveStartPeriod =
+    isInheritedPeriod
+      ? selectedPeriod
+      : startPeriod
 
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] =
@@ -121,10 +151,15 @@ function BudgetForm({
 
     if (
       duration === 'temporary' &&
-      (!endPeriod || endPeriod < startPeriod)
+      (
+        !endPeriod ||
+        endPeriod < effectiveStartPeriod
+      )
     ) {
       setError(
-        'O mês final não pode ser anterior ao mês inicial.',
+        isEditing
+          ? 'O mês final não pode ser anterior ao início da alteração.'
+          : 'O mês final não pode ser anterior ao mês inicial.',
       )
       return
     }
@@ -156,21 +191,32 @@ function BudgetForm({
       return
     }
 
+    const budgetData = {
+      startPeriod,
+      endPeriod,
+      category,
+      plannedAmountInCents,
+    }
+
     submittingRef.current = true
     setIsSubmitting(true)
     setError('')
 
     try {
-      await onCreateBudget({
-        startPeriod,
-        endPeriod,
-        category,
-        plannedAmountInCents,
-      })
+      if (isEditing) {
+        await onEditBudget(
+          budget.id,
+          budgetData,
+        )
+      } else {
+        await onCreateBudget(
+          budgetData,
+        )
+      }
     } catch (requestError) {
       setError(
         requestError.message ||
-          'Não foi possível cadastrar o limite.',
+          'Não foi possível salvar o limite.',
       )
     } finally {
       submittingRef.current = false
@@ -182,8 +228,17 @@ function BudgetForm({
     <form
       className="budget-form"
       onSubmit={handleSubmit}
+      onChange={() => setError('')}
       aria-busy={isSubmitting}
     >
+      {isEditing && (
+        <p className="budget-edit-notice">
+          {isInheritedPeriod
+            ? `A alteração valerá a partir de ${selectedPeriod}. Os meses anteriores serão preservados.`
+            : 'A alteração atualizará a regra desde seu mês inicial.'}
+        </p>
+      )}
+
       <div className="form-field">
         <label htmlFor="budget-category-input">
           Categoria do orçamento
@@ -194,6 +249,7 @@ function BudgetForm({
           name="category"
           type="text"
           list="budget-category-suggestions"
+          defaultValue={budget?.category ?? ''}
           placeholder="Ex.: Alimentação"
           maxLength={100}
           disabled={isSubmitting}
@@ -224,6 +280,13 @@ function BudgetForm({
           name="amount"
           type="text"
           inputMode="decimal"
+          defaultValue={
+            budget
+              ? formatAmountForInput(
+                  budget.plannedAmountInCents,
+                )
+              : ''
+          }
           placeholder="500,00"
           maxLength={16}
           disabled={isSubmitting}
@@ -237,7 +300,9 @@ function BudgetForm({
 
       <div className="form-field">
         <label htmlFor="budget-start-input">
-          Mês inicial
+          {isEditing
+            ? 'Mês inicial da regra'
+            : 'Mês inicial'}
         </label>
 
         <input
@@ -248,7 +313,7 @@ function BudgetForm({
           onChange={(event) =>
             setStartPeriod(event.target.value)
           }
-          disabled={isSubmitting}
+          disabled={isSubmitting || isEditing}
           required
         />
       </div>
@@ -275,8 +340,9 @@ function BudgetForm({
         </select>
 
         <small>
-          Contínuo: válido desde o mês inicial,
-          sem data final.
+          {duration === 'continuous'
+            ? 'Contínuo: válido desde o mês inicial, sem data final.'
+            : 'Temporário: válido até o mês final, inclusive.'}
         </small>
       </div>
 
@@ -290,7 +356,10 @@ function BudgetForm({
             id="budget-end-input"
             type="month"
             name="endPeriod"
-            min={startPeriod}
+            min={effectiveStartPeriod}
+            defaultValue={
+              budget?.endPeriod ?? ''
+            }
             disabled={isSubmitting}
             required
           />
@@ -298,7 +367,10 @@ function BudgetForm({
       )}
 
       {error && (
-        <p className="form-error" role="alert">
+        <p
+          className="form-error"
+          role="alert"
+        >
           {error}
         </p>
       )}
@@ -310,8 +382,10 @@ function BudgetForm({
           disabled={isSubmitting}
         >
           {isSubmitting
-            ? 'Cadastrando...'
-            : 'Cadastrar limite'}
+            ? 'Salvando...'
+            : isEditing
+              ? 'Salvar alterações'
+              : 'Cadastrar limite'}
         </button>
 
         <button

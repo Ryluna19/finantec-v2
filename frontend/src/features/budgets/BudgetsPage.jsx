@@ -87,34 +87,96 @@ function BudgetsPage({
   captureAuthGeneration,
   isCurrentAuthGeneration,
   expireSession,
+  onBudgetSavingChange,
 }) {
   const [selectedPeriod, setSelectedPeriod] =
     useState(getCurrentPeriod)
 
   const [isFormOpen, setIsFormOpen] =
-  useState(false)
+    useState(false)
+
+  const [editingBudget, setEditingBudget] =
+    useState(null)
 
   const {
-  budgets,
-  isLoadingBudgets,
-  budgetsLoadError,
-  addBudget,
+    budgets,
+    isLoadingBudgets,
+    budgetsLoadError,
+    addBudget,
+    updateBudget,
+    splitBudget,
   } = useBudgets({
     captureAuthGeneration,
     isCurrentAuthGeneration,
     expireSession,
   })
 
-  async function handleCreateBudget(budgetData) {
-  const created = await addBudget(budgetData)
-
-  if (created !== null) {
-    setSelectedPeriod(created.startPeriod)
+  function closeBudgetForm() {
     setIsFormOpen(false)
+    setEditingBudget(null)
   }
 
-  return created
-}
+  function openCreateForm() {
+    setEditingBudget(null)
+    setIsFormOpen(true)
+  }
+
+  function openEditForm(budget) {
+    setEditingBudget(budget)
+    setIsFormOpen(true)
+  }
+
+
+  async function saveBudget(operation) {
+    onBudgetSavingChange(true)
+
+    try {
+      return await operation()
+    } finally {
+      onBudgetSavingChange(false)
+    }
+  }
+
+  async function handleCreateBudget(budgetData) {
+    return saveBudget(async () => {
+      const created = await addBudget(budgetData)
+
+      if (created !== null) {
+        setSelectedPeriod(created.startPeriod)
+        closeBudgetForm()
+      }
+
+      return created
+    })
+  }
+
+  async function handleEditBudget(id, budgetData) {
+    return saveBudget(async () => {
+      const payload = {
+        category: budgetData.category,
+        plannedAmountInCents:
+          budgetData.plannedAmountInCents,
+        endPeriod: budgetData.endPeriod,
+      }
+
+      const isInheritedPeriod =
+        selectedPeriod > editingBudget.startPeriod
+
+      const result = isInheritedPeriod
+        ? await splitBudget(id, {
+            ...payload,
+            splitPeriod: selectedPeriod,
+          })
+        : await updateBudget(id, payload)
+
+      if (result !== null) {
+        closeBudgetForm()
+      }
+
+      return result
+    })
+  }
+
 
   const isLoading =
     isLoadingTransactions || isLoadingBudgets
@@ -155,6 +217,7 @@ function BudgetsPage({
             onChange={(event) =>
               setSelectedPeriod(event.target.value)
             }
+            disabled={isFormOpen}
           />
         </div>
       </section>
@@ -169,12 +232,11 @@ function BudgetsPage({
         </div>
       ) : (
         <>
-
           <div className="budget-actions">
             <button
               className="submit-button"
               type="button"
-              onClick={() => setIsFormOpen(true)}
+              onClick={openCreateForm}
               disabled={isFormOpen}
             >
               Novo limite
@@ -187,23 +249,29 @@ function BudgetsPage({
               aria-labelledby="budget-form-title"
             >
               <h2 id="budget-form-title">
-                Novo limite
+                {editingBudget
+                  ? selectedPeriod >
+                    editingBudget.startPeriod
+                    ? 'Alterar a partir deste mês'
+                    : 'Editar limite'
+                  : 'Novo limite'}
               </h2>
 
               <BudgetForm
-                key={selectedPeriod}
+                key={
+                  editingBudget
+                    ? `${editingBudget.id}-${selectedPeriod}`
+                    : `new-${selectedPeriod}`
+                }
                 selectedPeriod={selectedPeriod}
                 transactions={transactions}
-                onCreateBudget={
-                  handleCreateBudget
-                }
-                onCancel={() =>
-                  setIsFormOpen(false)
-                }
+                budget={editingBudget}
+                onCreateBudget={handleCreateBudget}
+                onEditBudget={handleEditBudget}
+                onCancel={closeBudgetForm}
               />
             </section>
           )}
-
 
           <section
             className="panel budget-summary-panel"
@@ -364,6 +432,20 @@ function BudgetsPage({
                           )}
                         </strong>
                       </p>
+
+                      <div className="budget-category-actions">
+                        <button
+                          className="budget-secondary-action"
+                          type="button"
+                          onClick={() => openEditForm(item)}
+                          disabled={isFormOpen}
+                          aria-label={
+                            `Editar limite de ${item.category}`
+                          }
+                        >
+                          Editar limite
+                        </button>
+                      </div>
                     </li>
                   )
                 })}
