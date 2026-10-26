@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import useBudgets from './useBudgets'
 import BudgetForm from './BudgetForm'
+import BudgetRuleActions from './BudgetRuleActions'
 import { calculateMonthlyBudgetTracking } from './budgetCalculations'
 
 const currencyFormatter = new Intl.NumberFormat(
@@ -89,6 +90,7 @@ function BudgetsPage({
   expireSession,
   onBudgetSavingChange,
 }) {
+
   const [selectedPeriod, setSelectedPeriod] =
     useState(getCurrentPeriod)
 
@@ -98,12 +100,16 @@ function BudgetsPage({
   const [editingBudget, setEditingBudget] =
     useState(null)
 
+  const [isBudgetSaving, setIsBudgetSaving] =
+    useState(false)
+
   const {
     budgets,
     isLoadingBudgets,
     budgetsLoadError,
     addBudget,
     updateBudget,
+    deleteBudget,
     splitBudget,
   } = useBudgets({
     captureAuthGeneration,
@@ -126,13 +132,14 @@ function BudgetsPage({
     setIsFormOpen(true)
   }
 
-
   async function saveBudget(operation) {
+    setIsBudgetSaving(true)
     onBudgetSavingChange(true)
 
     try {
       return await operation()
     } finally {
+      setIsBudgetSaving(false)
       onBudgetSavingChange(false)
     }
   }
@@ -164,9 +171,9 @@ function BudgetsPage({
 
       const result = isInheritedPeriod
         ? await splitBudget(id, {
-            ...payload,
-            splitPeriod: selectedPeriod,
-          })
+          ...payload,
+          splitPeriod: selectedPeriod,
+        })
         : await updateBudget(id, payload)
 
       if (result !== null) {
@@ -177,7 +184,20 @@ function BudgetsPage({
     })
   }
 
+  function handleEndBudget(budget, endPeriod) {
+    return saveBudget(() =>
+      updateBudget(budget.id, {
+        category: budget.category,
+        plannedAmountInCents:
+          budget.plannedAmountInCents,
+        endPeriod,
+      }),
+    )
+  }
 
+  function handleDeleteBudget(id) {
+    return saveBudget(() => deleteBudget(id))
+  }
   const isLoading =
     isLoadingTransactions || isLoadingBudgets
 
@@ -217,7 +237,7 @@ function BudgetsPage({
             onChange={(event) =>
               setSelectedPeriod(event.target.value)
             }
-            disabled={isFormOpen}
+            disabled={isFormOpen || isBudgetSaving}
           />
         </div>
       </section>
@@ -237,7 +257,7 @@ function BudgetsPage({
               className="submit-button"
               type="button"
               onClick={openCreateForm}
-              disabled={isFormOpen}
+              disabled={isFormOpen || isBudgetSaving}
             >
               Novo limite
             </button>
@@ -432,20 +452,19 @@ function BudgetsPage({
                           )}
                         </strong>
                       </p>
+                      <BudgetRuleActions
+                        budget={item}
+                        selectedPeriod={selectedPeriod}
+                        disabled={isFormOpen || isBudgetSaving}
+                        onEdit={() => openEditForm(item)}
+                        onEnd={(endPeriod) =>
+                          handleEndBudget(item, endPeriod)
+                        }
+                        onDelete={() =>
+                          handleDeleteBudget(item.id)
+                        }
+                      />
 
-                      <div className="budget-category-actions">
-                        <button
-                          className="budget-secondary-action"
-                          type="button"
-                          onClick={() => openEditForm(item)}
-                          disabled={isFormOpen}
-                          aria-label={
-                            `Editar limite de ${item.category}`
-                          }
-                        >
-                          Editar limite
-                        </button>
-                      </div>
                     </li>
                   )
                 })}

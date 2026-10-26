@@ -1176,4 +1176,194 @@ it('preserva a vigência ao dividir um orçamento temporário', async () => {
   ).toBe(false)
 })
 
+it('encerra a regra antes do mês selecionado e preserva os anteriores', async () => {
+  const original = {
+    id: 'b1',
+    startPeriod: '2026-06',
+    endPeriod: null,
+    category: 'Alimentação',
+    plannedAmountInCents: 10000,
+  }
+
+  const fetchMock = mockBudgetEditApi(
+    original,
+    async (url, options) => {
+      if (
+        url === `${API}/budgets/b1` &&
+        options.method === 'PUT'
+      ) {
+        return apiResponse(200, {
+          ...original,
+          endPeriod: '2026-06',
+        })
+      }
+
+      throw new Error(
+        `Requisição inesperada: ${url}`,
+      )
+    },
+  )
+
+  render(<App />)
+
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: 'Orçamento',
+    }),
+  )
+
+  const monthInput =
+    await screen.findByLabelText(
+      'Mês de referência',
+    )
+
+  fireEvent.change(monthInput, {
+    target: { value: '2026-07' },
+  })
+
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name:
+        'Encerrar limite de Alimentação a partir de 2026-07',
+    }),
+  )
+
+  expect(
+    fetchMock.mock.calls.filter(
+      ([url, options]) =>
+        url === `${API}/budgets/b1` &&
+        options.method === 'PUT',
+    ),
+  ).toHaveLength(0)
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Confirmar encerramento',
+    }),
+  )
+
+  await screen.findByText(
+    'Nenhum orçamento vigente para o mês selecionado.',
+  )
+
+  const putCall = fetchMock.mock.calls.find(
+    ([url, options]) =>
+      url === `${API}/budgets/b1` &&
+      options.method === 'PUT',
+  )
+
+  expect(putCall).toBeTruthy()
+
+  expect(JSON.parse(putCall[1].body)).toEqual({
+    category: 'Alimentação',
+    plannedAmountInCents: 10000,
+    endPeriod: '2026-06',
+  })
+
+  fireEvent.change(monthInput, {
+    target: { value: '2026-06' },
+  })
+
+  const summary = screen.getByRole(
+    'region',
+    { name: 'Resumo do mês' },
+  )
+
+  expect(
+    within(summary)
+      .getByText('Planejado')
+      .parentElement.textContent,
+  ).toContain(formatCurrency(10000))
+})
+
+it('exige confirmação antes de excluir uma regra', async () => {
+  const original = {
+    id: 'b1',
+    startPeriod: '2026-06',
+    endPeriod: null,
+    category: 'Alimentação',
+    plannedAmountInCents: 10000,
+  }
+
+  const fetchMock = mockBudgetEditApi(
+    original,
+    async (url, options) => {
+      if (
+        url === `${API}/budgets/b1` &&
+        options.method === 'DELETE'
+      ) {
+        return apiResponse(204, null)
+      }
+
+      throw new Error(
+        `Requisição inesperada: ${url}`,
+      )
+    },
+  )
+
+  render(<App />)
+
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: 'Orçamento',
+    }),
+  )
+
+  fireEvent.change(
+    await screen.findByLabelText(
+      'Mês de referência',
+    ),
+    {
+      target: { value: '2026-06' },
+    },
+  )
+
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: 'Excluir regra de Alimentação',
+    }),
+  )
+
+  const deleteCalls = () =>
+    fetchMock.mock.calls.filter(
+      ([url, options]) =>
+        url === `${API}/budgets/b1` &&
+        options.method === 'DELETE',
+    )
+
+  expect(deleteCalls()).toHaveLength(0)
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Cancelar',
+    }),
+  )
+
+  expect(deleteCalls()).toHaveLength(0)
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Excluir regra de Alimentação',
+    }),
+  )
+
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Confirmar exclusão',
+    }),
+  )
+
+  await screen.findByText(
+    'Nenhum orçamento vigente para o mês selecionado.',
+  )
+
+  expect(deleteCalls()).toHaveLength(1)
+
+  expect(
+    screen.queryByRole('button', {
+      name: 'Excluir regra de Alimentação',
+    }),
+  ).toBeNull()
+})
+
 })

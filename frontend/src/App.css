@@ -1591,3 +1591,41 @@
   padding: 8px 12px;
   font-size: var(--font-label);
 }
+
+
+/* Orçamento — encerramento e exclusão. */
+
+#budgets .budget-category-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#budgets .budget-category-actions .budget-delete-action {
+  color: var(--danger);
+}
+
+#budgets .budget-rule-confirmation {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background-color: var(--surface-2);
+}
+
+#budgets .budget-rule-confirmation p {
+  color: var(--text-secondary);
+  font-size: var(--font-label);
+  line-height: 1.5;
+}
+
+#budgets .budget-confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#budgets .budget-rule-confirmation .form-error {
+  margin-top: 12px;
+  color: var(--danger);
+}
