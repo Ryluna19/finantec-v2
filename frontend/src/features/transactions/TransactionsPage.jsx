@@ -25,6 +25,9 @@ function TransactionsPage({
   const [editingTransaction, setEditingTransaction] =
     useState(null)
 
+  const mutationsDisabled =
+    isLoadingTransactions || Boolean(transactionsLoadError)
+
   const {
     selectedYear,
     selectedMonth,
@@ -196,6 +199,7 @@ function TransactionsPage({
       </header>
 
       <TransactionImport
+        disabled={mutationsDisabled}
         onPreviewImport={
           previewTransactionImport
         }
@@ -220,6 +224,7 @@ function TransactionsPage({
 
         <TransactionForm
           key={editingTransaction?.id ?? 'new'}
+          disabled={mutationsDisabled}
           transaction={editingTransaction}
           onAddTransaction={addTransaction}
           onUpdateTransaction={
@@ -336,6 +341,7 @@ function TransactionsPage({
                   )}
 
                   <TransactionList
+                    disabled={mutationsDisabled}
                     transactions={
                       filteredTransactions
                     }

@@ -348,7 +348,7 @@ describe('App transactions', () => {
         ).toBe(true)
     })
 
-    it('keeps a newly created transaction when the initial GET resolves later', async () => {
+    it('waits for the initial GET before creating a transaction and preserves existing records', async () => {
         const initialGet = createDeferredPromise()
         const pendingPost = createDeferredPromise()
 
@@ -366,6 +366,12 @@ describe('App transactions', () => {
             category: 'Trabalho',
             type: 'income',
             amountInCents: 150000,
+        }
+
+        const existingTransaction = {
+            ...createdTransaction,
+            id: '22222222-2222-4222-8222-222222222222',
+            description: 'Transação anterior',
         }
 
         const fetchMock = vi.fn((url, options = {}) => {
@@ -422,11 +428,34 @@ describe('App transactions', () => {
             target: { value: '1500,00' },
         })
 
-        fireEvent.submit(
-            screen.getByRole('button', {
-                name: 'Adicionar transação',
-            }).closest('form'),
-        )
+        const submitButton = screen.getByRole('button', {
+            name: 'Adicionar transação',
+        })
+
+        expect(submitButton.disabled).toBe(true)
+        expect(dateInput.disabled).toBe(true)
+        expect(screen.getByLabelText('Arquivo CSV').disabled).toBe(true)
+
+        fireEvent.submit(submitButton.closest('form'))
+
+        expect(
+            fetchMock.mock.calls.filter(
+                ([, options = {}]) => options.method === 'POST',
+            ),
+        ).toHaveLength(0)
+
+        await resolveDeferredPromise(initialGet, {
+            ok: true,
+            status: 200,
+            json: async () => [existingTransaction],
+        })
+
+        await screen.findByText('Transação anterior')
+        expect(submitButton.disabled).toBe(false)
+        expect(dateInput.disabled).toBe(false)
+        expect(screen.getByLabelText('Arquivo CSV').disabled).toBe(false)
+
+        fireEvent.submit(submitButton.closest('form'))
 
         await waitFor(() => {
             expect(
@@ -449,12 +478,19 @@ describe('App transactions', () => {
             ).toBe(false)
         })
 
-        await resolveDeferredPromise(initialGet, {
-            ok: true,
-            json: async () => [],
+        const transactionList = screen.getByRole('region', {
+            name: 'Lista de transações',
         })
 
-        expect(screen.getByText('Salário')).toBeTruthy()
+        expect(within(transactionList).getByText('Transação anterior')).toBeTruthy()
+        expect(within(transactionList).getByText('Salário')).toBeTruthy()
+        expect(
+            fetchMock.mock.calls.filter(
+                ([url, options = {}]) =>
+                    url === 'http://localhost:3000/transactions' &&
+                    !options.method,
+            ),
+        ).toHaveLength(1)
     })
 
     it('shows a loading error instead of an empty state when the initial GET fails', async () => {
@@ -505,6 +541,22 @@ describe('App transactions', () => {
                 'Nenhuma transação encontrada para o período selecionado.',
             ),
         ).toBeNull()
+
+        const submitButton = screen.getByRole('button', {
+            name: 'Adicionar transação',
+        })
+
+        expect(submitButton.disabled).toBe(true)
+        expect(screen.getByLabelText('Data').disabled).toBe(true)
+        expect(screen.getByLabelText('Arquivo CSV').disabled).toBe(true)
+
+        fireEvent.submit(submitButton.closest('form'))
+
+        expect(
+            fetchMock.mock.calls.filter(
+                ([, options = {}]) => options.method === 'POST',
+            ),
+        ).toHaveLength(0)
     })
 
     it('prevents a second submission while the first POST is pending', async () => {
@@ -689,16 +741,10 @@ describe('App transactions', () => {
             }
 
             if (
-                url === 'http://localhost:3000/transactions' &&
+                url === 'http://localhost:3000/auth/logout' &&
                 options.method === 'POST'
             ) {
-                return Promise.resolve({
-                    ok: false,
-                    status: 401,
-                    json: async () => ({
-                        error: 'Sessão inválida ou expirada.',
-                    }),
-                })
+                return Promise.resolve({ ok: true, status: 204 })
             }
 
             if (
@@ -724,33 +770,8 @@ describe('App transactions', () => {
         render(<App />)
         await openTransactions()
 
-        const dateInput = await screen.findByLabelText('Data')
-
-        fireEvent.change(dateInput, {
-            target: { value: transactionDate },
-        })
-
-        fireEvent.change(screen.getByLabelText('Descrição'), {
-            target: { value: 'Forçar expiração' },
-        })
-
-        fireEvent.change(screen.getByLabelText('Categoria'), {
-            target: { value: 'Teste' },
-        })
-
-        fireEvent.change(screen.getByLabelText('Tipo'), {
-            target: { value: 'income' },
-        })
-
-        fireEvent.change(screen.getByLabelText('Valor (R$)'), {
-            target: { value: '10,00' },
-        })
-
-        fireEvent.click(
-            screen.getByRole('button', {
-                name: 'Adicionar transação',
-            }),
-        )
+        await screen.findByText('Carregando transações...')
+        fireEvent.click(screen.getByRole('button', { name: 'Sair' }))
 
         await screen.findByRole('heading', {
             name: 'Entrar',
@@ -795,7 +816,6 @@ describe('App transactions', () => {
     })
 
     it('ignores an old transaction POST after the authenticated user changes', async () => {
-        const oldTransactionsGet = createDeferredPromise()
         const oldPost = createDeferredPromise()
 
         const userB = {
@@ -851,7 +871,11 @@ describe('App transactions', () => {
                 transactionsGetCount += 1
 
                 if (transactionsGetCount === 1) {
-                    return oldTransactionsGet.promise
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        json: async () => [],
+                    })
                 }
 
                 return Promise.resolve({
@@ -866,6 +890,13 @@ describe('App transactions', () => {
                 options.method === 'POST'
             ) {
                 return oldPost.promise
+            }
+
+            if (
+                url === 'http://localhost:3000/auth/logout' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({ ok: true, status: 204 })
             }
 
             if (
@@ -890,6 +921,10 @@ describe('App transactions', () => {
 
         render(<App />)
         await openTransactions()
+
+        await screen.findByText(
+            'Nenhuma transação encontrada para o período selecionado.',
+        )
 
         const dateInput = await screen.findByLabelText('Data')
 
@@ -923,13 +958,7 @@ describe('App transactions', () => {
             name: 'Adicionando...',
         })
 
-        oldTransactionsGet.resolve({
-            ok: false,
-            status: 401,
-            json: async () => ({
-                error: 'Sessão inválida ou expirada.',
-            }),
-        })
+        fireEvent.click(screen.getByRole('button', { name: 'Sair' }))
 
         await screen.findByRole('heading', {
             name: 'Entrar',
@@ -974,7 +1003,6 @@ describe('App transactions', () => {
     })
 
     it('ignores a late 401 from the previous authenticated user', async () => {
-        const oldTransactionsGet = createDeferredPromise()
         const oldPost = createDeferredPromise()
 
         const userB = {
@@ -1021,7 +1049,11 @@ describe('App transactions', () => {
                 transactionsGetCount += 1
 
                 if (transactionsGetCount === 1) {
-                    return oldTransactionsGet.promise
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        json: async () => [],
+                    })
                 }
 
                 return Promise.resolve({
@@ -1036,6 +1068,13 @@ describe('App transactions', () => {
                 options.method === 'POST'
             ) {
                 return oldPost.promise
+            }
+
+            if (
+                url === 'http://localhost:3000/transactions/import/preview' &&
+                options.method === 'POST'
+            ) {
+                return Promise.resolve({ ok: false, status: 401 })
             }
 
             if (
@@ -1060,6 +1099,10 @@ describe('App transactions', () => {
 
         render(<App />)
         await openTransactions()
+
+        await screen.findByText(
+            'Nenhuma transação encontrada para o período selecionado.',
+        )
 
         const dateInput = await screen.findByLabelText('Data')
 
@@ -1093,14 +1136,10 @@ describe('App transactions', () => {
             name: 'Adicionando...',
         })
 
-        // Outra requisição da conta A detecta a sessão expirada.
-        await resolveDeferredPromise(oldTransactionsGet, {
-            ok: false,
-            status: 401,
-            json: async () => ({
-                error: 'Sessão inválida ou expirada.',
-            }),
+        fireEvent.change(screen.getByLabelText('Arquivo CSV'), {
+            target: { files: [new File(['CSV'], 'transacoes.csv', { type: 'text/csv' })] },
         })
+        fireEvent.click(screen.getByRole('button', { name: 'Analisar arquivo' }))
 
         await screen.findByRole('heading', {
             name: 'Entrar',

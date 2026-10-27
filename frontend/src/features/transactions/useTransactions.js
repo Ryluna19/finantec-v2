@@ -32,6 +32,7 @@ function useTransactions({
 
   const transactionsRef = useRef([])
   const mutationVersionRef = useRef(0)
+  const hasLoadedTransactionsRef = useRef(false)
 
   useEffect(() => {
     let isActive = true
@@ -43,6 +44,7 @@ function useTransactions({
       const mutationVersionAtStart =
         mutationVersionRef.current
 
+      hasLoadedTransactionsRef.current = false
       setIsLoadingTransactions(true)
       setTransactionsLoadError(null)
 
@@ -88,6 +90,7 @@ function useTransactions({
         }
 
         transactionsRef.current = data
+        hasLoadedTransactionsRef.current = true
         setTransactions(data)
       } catch (error) {
         if (
@@ -122,6 +125,7 @@ function useTransactions({
 
     return () => {
       isActive = false
+      hasLoadedTransactionsRef.current = false
     }
   }, [
     captureAuthGeneration,
@@ -143,7 +147,17 @@ function useTransactions({
     return nextTransactions
   }
 
+  function assertTransactionsLoaded() {
+    if (!hasLoadedTransactionsRef.current) {
+      throw new Error(
+        'As transações precisam ser carregadas antes de realizar esta operação.',
+      )
+    }
+  }
+
   async function addTransaction(transactionData) {
+    assertTransactionsLoaded()
+
     const authGenerationAtStart =
       captureAuthGeneration()
 
@@ -210,6 +224,8 @@ function useTransactions({
     id,
     transactionData,
   ) {
+    assertTransactionsLoaded()
+
     const authGenerationAtStart =
       captureAuthGeneration()
 
@@ -279,6 +295,8 @@ function useTransactions({
   }
 
   async function deleteTransaction(id) {
+    assertTransactionsLoaded()
+
     const authGenerationAtStart =
       captureAuthGeneration()
 
@@ -363,6 +381,8 @@ function useTransactions({
   }
 
   async function previewTransactionImport(file) {
+    assertTransactionsLoaded()
+
     const authGenerationAtStart =
       captureAuthGeneration()
 
@@ -428,6 +448,8 @@ function useTransactions({
     file,
     includeDuplicates,
   ) {
+    assertTransactionsLoaded()
+
     const authGenerationAtStart =
       captureAuthGeneration()
 

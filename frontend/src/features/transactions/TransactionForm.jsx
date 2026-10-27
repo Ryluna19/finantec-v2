@@ -12,6 +12,7 @@ function TransactionForm({
     onAddTransaction,
     onUpdateTransaction,
     onCancelEdit,
+    disabled = false,
 }) {
     const [error, setError] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -20,7 +21,7 @@ function TransactionForm({
     async function handleSubmit(event) {
         event.preventDefault()
 
-        if (submitInProgressRef.current) {
+        if (disabled || submitInProgressRef.current) {
             return
         }
         const form = event.currentTarget
@@ -102,7 +103,7 @@ function TransactionForm({
                     name="date"
                     type="date"
                     defaultValue={transaction?.date ?? ''}
-                    disabled={isSubmitting}
+                    disabled={disabled || isSubmitting}
                     required
                 />
             </div>
@@ -112,7 +113,7 @@ function TransactionForm({
                     id="transaction-description"
                     name="description"
                     defaultValue={transaction?.description ?? ''}
-                    disabled={isSubmitting}
+                    disabled={disabled || isSubmitting}
                     required
                 />
             </div>
@@ -123,7 +124,7 @@ function TransactionForm({
                     id="transaction-category"
                     name="category"
                     defaultValue={transaction?.category ?? ''}
-                    disabled={isSubmitting}
+                    disabled={disabled || isSubmitting}
                     required
                 />
             </div>
@@ -134,7 +135,7 @@ function TransactionForm({
                     id="transaction-type"
                     name="type"
                     defaultValue={transaction?.type ?? 'expense'}
-                    disabled={isSubmitting}
+                    disabled={disabled || isSubmitting}
                 >
                     <option value="expense">Despesa</option>
                     <option value="income">Receita</option>
@@ -156,7 +157,7 @@ function TransactionForm({
                             : ''
 
                     }
-                    disabled={isSubmitting}
+                    disabled={disabled || isSubmitting}
                     required
                 />
                 <small id="transaction-amount-hint">
@@ -169,7 +170,7 @@ function TransactionForm({
             <button
                 className="submit-button"
                 type="submit"
-                disabled={isSubmitting}
+                disabled={disabled || isSubmitting}
             >
                 {isSubmitting
                     ? transaction
@@ -184,7 +185,7 @@ function TransactionForm({
                 <button
                     type="button"
                     onClick={onCancelEdit}
-                    disabled={isSubmitting}
+                    disabled={disabled || isSubmitting}
                 >
                     Cancelar edição
                 </button>

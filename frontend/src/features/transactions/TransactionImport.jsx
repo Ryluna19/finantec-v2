@@ -11,6 +11,7 @@ const currencyFormatter = new Intl.NumberFormat(
 function TransactionImport({
   onPreviewImport,
   onImportTransactions,
+  disabled = false,
 }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
@@ -33,7 +34,14 @@ function TransactionImport({
   const [inputVersion, setInputVersion] =
     useState(0)
 
+  const controlsDisabled =
+    disabled || isPreviewing || isImporting
+
   function handleFileChange(event) {
+    if (controlsDisabled) {
+      return
+    }
+
     const selectedFile =
       event.target.files?.[0] ?? null
 
@@ -45,7 +53,7 @@ function TransactionImport({
   }
 
   async function handlePreview() {
-    if (!file || isPreviewing) {
+    if (!file || controlsDisabled) {
       return
     }
 
@@ -79,7 +87,7 @@ function TransactionImport({
     if (
       !file ||
       !preview ||
-      isImporting
+      controlsDisabled
     ) {
       return
     }
@@ -165,15 +173,14 @@ function TransactionImport({
             type="file"
             accept=".csv,text/csv"
             onChange={handleFileChange}
+            disabled={controlsDisabled}
           />
         </div>
 
         <button
           type="button"
           disabled={
-            !file ||
-            isPreviewing ||
-            isImporting
+            !file || controlsDisabled
           }
           onClick={handlePreview}
         >
@@ -392,6 +399,7 @@ function TransactionImport({
               <input
                 type="checkbox"
                 checked={includeDuplicates}
+                disabled={controlsDisabled}
                 onChange={(event) =>
                   setIncludeDuplicates(
                     event.target.checked,
@@ -414,9 +422,7 @@ function TransactionImport({
           <button
             type="button"
             disabled={
-              !canConfirm ||
-              isImporting ||
-              isPreviewing
+              !canConfirm || controlsDisabled
             }
             onClick={handleImport}
           >

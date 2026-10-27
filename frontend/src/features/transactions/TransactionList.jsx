@@ -13,6 +13,7 @@ function TransactionList({
   onEditTransaction,
   onDeleteTransaction,
   emptyMessage = 'Nenhuma transação para exibir.',
+  disabled = false,
 }) {
   if (transactions.length === 0) {
   return (
@@ -23,6 +24,10 @@ function TransactionList({
 }
 
   async function handleDelete(transaction) {
+    if (disabled) {
+      return
+    }
+
     const confirmed = window.confirm(
       `Excluir permanentemente a transação "${transaction.description}"?`,
     )
@@ -76,6 +81,7 @@ function TransactionList({
               <td>
                 <button
                   type="button"
+                  disabled={disabled}
                   onClick={() => onEditTransaction(transaction)}
                   aria-label={`Editar ${transaction.description}`}
                 >
@@ -84,6 +90,7 @@ function TransactionList({
                 <button
                   className="transaction-delete-action"
                   type="button"
+                  disabled={disabled}
                   onClick={() => handleDelete(transaction)}
                   aria-label={`Excluir ${transaction.description}`}
                 >
