@@ -1587,6 +1587,7 @@ test('transaction routes require authentication', async () => {
     ['get', '/transactions'],
     ['post', '/transactions'],
     ['post', '/transactions/import/preview'],
+    ['post', '/transactions/import'],
     [
       'put',
       '/transactions/6b959525-67fc-453c-b4b2-956058724f22',

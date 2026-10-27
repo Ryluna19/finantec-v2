@@ -1278,8 +1278,22 @@ export function createApp({ database }) {
       try {
         client = await database.connect()
 
-        await client.query('BEGIN')
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED')
         transactionStarted = true
+
+        // A consulta seguinte deve enxergar o commit da importação anterior.
+        const userResult = await client.query(
+          'SELECT id FROM users WHERE id = $1 FOR UPDATE',
+          [request.user.id],
+        )
+
+        if (userResult.rowCount === 0) {
+          await client.query('ROLLBACK')
+          transactionStarted = false
+          return response.status(401).json({
+            error: 'Sessão inválida ou expirada.',
+          })
+        }
 
         const existingResult =
         await client.query(
