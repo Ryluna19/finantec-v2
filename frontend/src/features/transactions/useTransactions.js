@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { apiUrl } from '../../apiUrl'
 
 function sortTransactions(transactionList) {
   return [...transactionList].sort(
@@ -50,7 +51,7 @@ function useTransactions({
 
       try {
         const response = await fetch(
-          'http://localhost:3000/transactions',
+          apiUrl('/transactions'),
           {
             credentials: 'include',
           },
@@ -163,7 +164,7 @@ function useTransactions({
 
     try {
       const response = await fetch(
-        'http://localhost:3000/transactions',
+        apiUrl('/transactions'),
         {
           credentials: 'include',
           method: 'POST',
@@ -231,7 +232,7 @@ function useTransactions({
 
     try {
       const response = await fetch(
-        `http://localhost:3000/transactions/${id}`,
+        apiUrl(`/transactions/${id}`),
         {
           credentials: 'include',
           method: 'PUT',
@@ -302,7 +303,7 @@ function useTransactions({
 
     try {
       const response = await fetch(
-        `http://localhost:3000/transactions/${id}`,
+        apiUrl(`/transactions/${id}`),
         {
           credentials: 'include',
           method: 'DELETE',
@@ -392,7 +393,7 @@ function useTransactions({
 
     try {
       const response = await fetch(
-        'http://localhost:3000/transactions/import/preview',
+        apiUrl('/transactions/import/preview'),
         {
           credentials: 'include',
           method: 'POST',
@@ -464,7 +465,7 @@ function useTransactions({
 
     try {
       const response = await fetch(
-        'http://localhost:3000/transactions/import',
+        apiUrl('/transactions/import'),
         {
           credentials: 'include',
           method: 'POST',

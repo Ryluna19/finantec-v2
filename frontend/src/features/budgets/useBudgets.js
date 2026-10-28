@@ -1,5 +1,6 @@
 
 import { useEffect, useRef, useState } from 'react'
+import { apiUrl } from '../../apiUrl'
 
 async function requestBudget(
   path,
@@ -9,7 +10,7 @@ async function requestBudget(
   expireSession,
 ) {
   const response = await fetch(
-    `http://localhost:3000${path}`,
+    apiUrl(path),
     {
       credentials: 'include',
       ...options,

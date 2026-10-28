@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { apiUrl } from '../../apiUrl'
 
 function useAuth() {
   const [user, setUser] = useState(null)
@@ -76,7 +77,7 @@ function useAuth() {
     async function loadSession() {
       try {
         const response = await fetch(
-          'http://localhost:3000/auth/me',
+          apiUrl('/auth/me'),
           {
             credentials: 'include',
           },
@@ -146,7 +147,7 @@ function useAuth() {
 
     try {
       const response = await fetch(
-        'http://localhost:3000/auth/login',
+        apiUrl('/auth/login'),
         {
           method: 'POST',
           credentials: 'include',
@@ -219,7 +220,7 @@ function useAuth() {
 
     try {
       const response = await fetch(
-        'http://localhost:3000/auth/register',
+        apiUrl('/auth/register'),
         {
           method: 'POST',
           credentials: 'include',
@@ -300,7 +301,7 @@ function useAuth() {
 
     try {
       const response = await fetch(
-        'http://localhost:3000/auth/logout',
+        apiUrl('/auth/logout'),
         {
           method: 'POST',
           credentials: 'include',
@@ -336,7 +337,7 @@ function useAuth() {
      */
     try {
       const response = await fetch(
-        'http://localhost:3000/auth/me',
+        apiUrl('/auth/me'),
         {
           credentials: 'include',
         },

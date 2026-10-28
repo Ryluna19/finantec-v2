@@ -166,9 +166,25 @@ function parseIncludeDuplicates(value) {
 export function createApp({ database }) {
   const app = express()
 
+  const frontendOrigin = process.env.FRONTEND_ORIGIN
+
+  if (frontendOrigin) {
+    const originUrl = new URL(frontendOrigin)
+    if (
+      !['http:', 'https:'].includes(originUrl.protocol) ||
+      originUrl.origin !== frontendOrigin
+    ) {
+      throw new Error('FRONTEND_ORIGIN must be a single HTTP(S) origin without a path.')
+    }
+  }
+
   app.use(
     cors({
-      origin: 'http://localhost:5173',
+      origin: frontendOrigin || (
+        process.env.NODE_ENV === 'production'
+          ? false
+          : 'http://localhost:5173'
+      ),
       credentials: true,
     }),
   )
