@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import { rateLimit } from 'express-rate-limit'
 import { randomUUID } from 'node:crypto'
 import { hashPassword, verifyPassword } from './password.js'
 import {
@@ -189,6 +190,27 @@ export function createApp({ database }) {
     }),
   )
 
+  const rateLimitMessage = {
+    error: 'Muitas tentativas. Aguarde antes de tentar novamente.',
+  }
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 15,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: rateLimitMessage,
+  })
+  const registrationLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: rateLimitMessage,
+  })
+
+  // Limita também JSON inválido, antes do parser e da validação de credenciais.
+  app.post('/auth/login', loginLimiter)
+  app.post('/auth/register', registrationLimiter)
   app.use(express.json())
 
   function isValidUuid(value) {

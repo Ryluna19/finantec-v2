@@ -38,3 +38,30 @@ prefix rewriting because Express routes currently have no `/api` prefix.
 
 This configuration does not provision PostgreSQL, apply migrations, configure
 HTTPS or create deployment routing. Those remain deployment prerequisites.
+
+## Public authentication rate limits
+
+- `POST /auth/login`: 15 requests per client IP in 15 minutes.
+- `POST /auth/register`: 5 requests per client IP in 60 minutes.
+- Each endpoint has its own limiter and in-memory store, created inside
+  `createApp`. Applications and endpoints do not share counters.
+- All attempts count, including successful requests and invalid JSON or
+  credentials. Limiting runs before JSON parsing, validation, database access
+  and password hashing/verification. Other routes are not rate limited.
+- Blocked requests return HTTP 429 and
+  `{ "error": "Muitas tentativas. Aguarde antes de tentar novamente." }`.
+  `Retry-After` reports the remaining wait in seconds; standard rate-limit
+  headers are also enabled.
+
+Express `trust proxy` remains disabled. The limiter uses Express's client IP
+and the library's default IPv6 subnet handling, not a client-supplied
+`X-Forwarded-For`. Before deploying behind a reverse proxy/load balancer, define
+and test a trust policy for the actual hosting topology and trusted proxies.
+Do not enable `trust proxy: true` or trust arbitrary forwarded headers.
+Without this configuration, users behind a proxy may share its IP quota.
+
+Memory counters reset when the process restarts and are not shared between
+backend processes, workers or instances. This first layer is not distributed
+brute-force protection or DDoS protection. Shared-store/edge protections and a
+safe proxy configuration must be evaluated for the chosen production setup;
+no Redis, database tables or hosting-specific settings are added here.
