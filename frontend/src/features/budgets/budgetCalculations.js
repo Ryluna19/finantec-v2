@@ -1,11 +1,4 @@
-function normalizeCategoryKey(category) {
-  return String(category ?? '')
-    .trim()
-    .replace(/\s+/gu, ' ')
-    .normalize('NFKD')
-    .replace(/\p{M}+/gu, '')
-    .toLowerCase()
-}
+import { normalizeCategoryKey } from '../../shared/category'
 
 export function calculateMonthlyBudgetTracking({
   transactions,

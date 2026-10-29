@@ -157,7 +157,54 @@ it('returns consumption categories sorted by amount', () => {
       amountInCents: 15000,
     },
   ])
-    })
+})
+
+ it('groups equivalent categories', () => {
+  const result = calculateFinancialOverview([
+    {
+      type: 'expense',
+      category: 'Alimentação',
+      amountInCents: 35000,
+    },
+    {
+      type: 'expense',
+      category: 'alimentacao',
+      amountInCents: 5000,
+    },
+  ])
+
+  expect(result.expenseCategories).toEqual([
+    {
+      category: 'Alimentação',
+      amountInCents: 40000,
+    },
+  ])
+
+  expect(result.largestExpenseCategory).toBe(
+    'Alimentação',
+  )
+})
+it('formats the category label when grouping', () => {
+  const result = calculateFinancialOverview([
+    {
+      type: 'expense',
+      category: 'alimentacao',
+      amountInCents: 10000,
+    },
+    {
+      type: 'expense',
+      category: 'Alimentação',
+      amountInCents: 20000,
+    },
+  ])
+
+  expect(result.expenseCategories).toEqual([
+    {
+      category: 'Alimentacao',
+      amountInCents: 30000,
+    },
+  ])
+})
     it('calculates monthly income and expenses', () => {
     const result = calculateFinancialOverview([
         {
@@ -206,4 +253,24 @@ it('returns consumption categories sorted by amount', () => {
 
     expect(result.monthlyEvolution).toHaveLength(12)
     })
+
+    it('keeps distinct category labels after formatting', () => {
+  const result = calculateFinancialOverview([
+    {
+      type: 'expense',
+      category: 'ß',
+      amountInCents: 10000,
+    },
+    {
+      type: 'expense',
+      category: 'SS',
+      amountInCents: 5000,
+    },
+  ])
+
+  expect(result.expenseCategories).toEqual([
+    { category: 'ß', amountInCents: 10000 },
+    { category: 'SS', amountInCents: 5000 },
+  ])
+})
 })

@@ -1,8 +1,10 @@
+import {
+  normalizeCategoryKey,
+  formatCategoryLabel,
+} from '../../shared/category'
+
 function isReserveCategory(category) {
-  return (
-    category.trim().toLocaleLowerCase('pt-BR') ===
-    'reserva'
-  )
+  return normalizeCategoryKey(category) === 'reserva'
 }
 
 export function calculateFinancialOverview(
@@ -58,41 +60,32 @@ export function calculateFinancialOverview(
         continue
         }
 
-        expensesByCategory.set(
-        transaction.category,
-        (expensesByCategory.get(transaction.category) ?? 0) +
-            transaction.amountInCents,
-        )
+        const key = normalizeCategoryKey(transaction.category)
+
+          if (expensesByCategory.has(key)) {
+            expensesByCategory.get(key).amountInCents += transaction.amountInCents
+
+
+          } else {
+            expensesByCategory.set(key, {
+              category: formatCategoryLabel(transaction.category),
+              amountInCents: transaction.amountInCents,
+            })
+          }
   }
 
   const expenseCategories = [
-  ...expensesByCategory.entries(),
-]
-  .map(([category, amountInCents]) => ({
-    category,
-    amountInCents,
-  }))
-  .sort(
+  ...expensesByCategory.values(),
+  ].sort(
     (first, second) =>
-      second.amountInCents -
-      first.amountInCents,
+      second.amountInCents - first.amountInCents,
   )
 
-  let largestExpenseCategory = null
-  let largestExpenseCategoryInCents = 0
+  const largestExpenseCategory =
+  expenseCategories[0]?.category ?? null
 
-  for (const [
-    category,
-    amountInCents,
-  ] of expensesByCategory) {
-    if (
-      amountInCents >
-      largestExpenseCategoryInCents
-    ) {
-      largestExpenseCategory = category
-      largestExpenseCategoryInCents = amountInCents
-    }
-  }
+  const largestExpenseCategoryInCents =
+  expenseCategories[0]?.amountInCents ?? 0
 
   const consumptionInCents =
     totalExpenseInCents - reserveInCents
